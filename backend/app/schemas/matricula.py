@@ -1,36 +1,31 @@
-# backend/app/schemas/tutoria.py
-from pydantic import BaseModel, Field
+# backend/app/schemas/matricula.py
+
+from pydantic import BaseModel
 from typing import Optional
-from datetime import datetime
-# Importamos los schemas necesarios
-from .tutor import Tutor
-from .matricula import Matricula  # ✅ AGREGADO
 
-class TutoriaBase(BaseModel):
-    fecha: datetime
-    duracion_min: int = Field(..., gt=0)
-    tema: Optional[str] = None
-    modalidad: str
-    estado: str
+# Importamos los schemas que vamos a anidar
+from .estudiante import Estudiante
+from .asignatura import Asignatura
+from .periodo_academico import PeriodoAcademico
 
-class TutoriaCreate(BaseModel):
-    matricula_id: int
-    tutor_id: int
-    fecha: datetime
-    duracion_min: int = 60
-    tema: str
-    modalidad: str
-    estado: str = "solicitada"
+class MatriculaBase(BaseModel):
+    estudiante_id: int
+    asignatura_id: int
+    periodo_id: int
+    paralelo: Optional[str] = None
 
-# Schema para la respuesta, con más detalles
-class Tutoria(TutoriaBase):
+class MatriculaCreate(MatriculaBase):
+    pass
+
+class Matricula(MatriculaBase):
     id: int
-    matricula_id: int
-    tutor_id: int
     
-    # ✅ Objetos anidados completos
-    tutor: Tutor
-    matricula: Matricula  # ✅ AGREGADO
-    
+    # --- Anidación de Datos ---
+    # Aquí está la magia: en lugar de solo IDs,
+    # la API devolverá los objetos completos.
+    estudiante: Estudiante
+    asignatura: Asignatura
+    periodo: PeriodoAcademico
+
     class Config:
         from_attributes = True
