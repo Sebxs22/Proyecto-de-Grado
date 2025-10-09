@@ -1,0 +1,83 @@
+# Proyecto-de-Grado/docker-compose.yml
+
+version: '3.8'
+
+# Aquí definimos todos los servicios (contenedores) que compondrán nuestra aplicación.
+services:
+
+  # 1. Servicio de Base de Datos (PostgreSQL)
+  db:
+    image: postgres:16-alpine
+    container_name: tutorias-db
+    hostname: db
+    # --- Configuración Clave ---
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - POSTGRES_DB=tutorias_db
+    volumes:
+      # Montamos nuestro script .sql para que se ejecute al iniciar por primera vez.
+      - ./backend/app/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+      # Hacemos que los datos de la BD se guarden en el disco duro para que no se borren.
+      - postgres_data:/var/lib/postgresql/data/
+    ports:
+      # Hacemos que la base de datos sea accesible desde nuestra máquina en el puerto 5432.
+      - "5432:5432"
+    networks:
+      - tutorias-net
+
+  # 2. Servicio de Backend (FastAPI)
+  backend:
+    # Le decimos que construya la imagen usando el Dockerfile de la carpeta /backend.
+    build: ./backend
+    container_name: tutorias-backend
+    # El comando para iniciar el servidor de FastAPI en modo desarrollo (se reinicia con cambios).
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    # --- Configuración Clave ---
+    environment:
+      # Esta es la dirección para que el backend encuentre la base de datos.
+      - DATABASE_URL=postgresql://user:password@db:5432/tutorias_db
+      # Variables de seguridad que usará nuestra aplicación.
+      - SECRET_KEY=un_secreto_muy_fuerte_que_debes_cambiar
+      - ALGORITHM=HS256
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+    volumes:
+      # Sincronizamos el código de nuestra máquina con el del contenedor para ver cambios al instante.
+      - ./backend:/app
+      # Hacemos que los archivos CSV estén disponibles dentro del contenedor.
+      - ./backend:/app
+    ports:
+      # Hacemos accesible la API en el puerto 8000.
+      - "8000:8000"
+    # Le decimos que no inicie hasta que el servicio 'db' esté listo.
+    depends_on:
+      - db
+    networks:
+      - tutorias-net
+
+  # 3. Servicio de Frontend (React)
+  frontend:
+    # Le decimos que construya la imagen usando el Dockerfile de la carpeta /frontend.
+    build: ./frontend
+    container_name: tutorias-frontend
+    volumes:
+      # Sincronizamos el código para ver los cambios en la interfaz al instante.
+      - ./frontend:/app
+      - /app/node_modules # Un truco para evitar conflictos con la carpeta node_modules local.
+    ports:
+      # Hacemos accesible la aplicación web en el puerto 5173 (puerto por defecto de Vite).
+      - "5173:5173"
+    # Le decimos que no inicie hasta que el 'backend' esté listo.
+    depends_on:
+      - backend
+    networks:
+      - tutorias-net
+
+# Definimos el volumen para persistir los datos de la base de datos.
+volumes:
+  postgres_data:
+
+# Definimos la red privada para que los contenedores se comuniquen entre sí.
+networks:
+  tutorias-net:
+    driver: bridge

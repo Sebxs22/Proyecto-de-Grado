@@ -1,0 +1,86 @@
+# backend/app/services/tutoria_service.py
+
+from sqlalchemy.orm import Session, joinedload
+from app.models.tutoria import Tutoria
+from app.models.tutor import Tutor
+from app.models.matricula import Matricula
+from app.models.estudiante import Estudiante
+from app.models.user import Usuario
+from app.schemas.tutoria import TutoriaCreate
+from fastapi import HTTPException
+
+class TutoriaService:
+    
+    def create_tutoria(self, db: Session, tutoria: TutoriaCreate, estudiante_id: int):
+        """
+        Crea una nueva tutoría.
+        """
+        try:
+            
+            tutoria_dict = tutoria.dict()
+            tutoria_dict['estado'] = 'solicitada'  # ✅ FORZAR ESTADO
+            # Crear la tutoría
+            nueva_tutoria = Tutoria(**tutoria.dict())
+            db.add(nueva_tutoria)
+            db.commit()
+            db.refresh(nueva_tutoria)
+            
+            # Recargar con todas las relaciones necesarias
+            tutoria_completa = db.query(Tutoria).options(
+                joinedload(Tutoria.tutor).joinedload(Tutor.usuario),  # Correcto ✅
+                joinedload(Tutoria.matricula).joinedload(Matricula.estudiante).joinedload(Estudiante.usuario),
+                joinedload(Tutoria.matricula).joinedload(Matricula.asignatura)
+            ).filter(Tutoria.id == nueva_tutoria.id).first()
+            
+            return tutoria_completa
+            
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"Error al crear tutoría: {str(e)}")
+    
+    def get_tutoria_by_id(self, db: Session, tutoria_id: int):
+        """
+        Obtiene una tutoría por ID con todas sus relaciones.
+        """
+        tutoria = db.query(Tutoria).options(
+            joinedload(Tutoria.tutor).joinedload(Tutor.usuario),
+            joinedload(Tutoria.matricula).joinedload(Matricula.estudiante).joinedload(Estudiante.usuario),
+            joinedload(Tutoria.matricula).joinedload(Matricula.asignatura)
+        ).filter(Tutoria.id == tutoria_id).first()
+        
+        if not tutoria:
+            raise HTTPException(status_code=404, detail="Tutoría no encontrada")
+        
+        return tutoria
+    
+    def get_tutorias_by_estudiante(self, db: Session, estudiante_id: int):
+        """
+        Obtiene todas las tutorías de un estudiante.
+        """
+        tutorias = db.query(Tutoria).join(
+            Matricula, Tutoria.matricula_id == Matricula.id
+        ).filter(
+            Matricula.estudiante_id == estudiante_id
+        ).options(
+            joinedload(Tutoria.tutor).joinedload(Tutor.usuario),
+            joinedload(Tutoria.matricula).joinedload(Matricula.asignatura)
+        ).all()
+        
+        return tutorias
+    
+    def get_tutorias_by_tutor(self, db: Session, tutor_id: int):
+        """
+        Obtiene todas las tutorías de un tutor.
+        """
+        tutorias = db.query(Tutoria).filter(
+            Tutoria.tutor_id == tutor_id
+        ).options(
+            joinedload(Tutoria.tutor).joinedload(Tutor.usuario),
+            joinedload(Tutoria.matricula).joinedload(Matricula.estudiante).joinedload(Estudiante.usuario),
+            joinedload(Tutoria.matricula).joinedload(Matricula.asignatura)
+        ).all()
+        
+        return tutorias
+
+# Instancia del servicio para usar en los endpoints
+tutoria_service = TutoriaService()
