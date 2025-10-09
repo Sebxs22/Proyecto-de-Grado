@@ -3,7 +3,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware # <--- 1. IMPORTAMOS EL MÓDULO
 
-# Importamos los routers
+# Importamos los routers jkhjkjhjkhjkhjk
 from app.routes import users, auth, dashboard, tutorias
 
 app = FastAPI(
