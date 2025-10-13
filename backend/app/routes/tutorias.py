@@ -4,8 +4,9 @@ from sqlalchemy.orm import Session
 from typing import List
 from app.db.database import get_db
 from app.dependencies import get_current_user
-from app.schemas.tutoria import Tutoria, TutoriaCreate
+from app.schemas.tutoria import Tutoria, TutoriaCreate, TutoriaUpdate
 from app.services.tutoria_service import tutoria_service  # ✅ CORREGIDO
+from app.services.tutor_dashboard_service import get_tutor_id_by_user_email # <--- AÑADE ESTA LÍNEA
 from app.models.user import Usuario as UserModel
 
 router = APIRouter()
@@ -34,3 +35,29 @@ def obtener_mis_tutorias(
         return tutoria_service.get_tutorias_by_estudiante(db=db, estudiante_id=current_user.id)  # ✅ CORREGIDO
     # Aquí iría la lógica para el tutor
     return []
+
+    # --- NUEVO ENDPOINT PARA ACTUALIZAR ESTADO ---
+@router.patch("/{tutoria_id}/estado", response_model=Tutoria)
+def actualizar_estado_tutoria(
+    tutoria_id: int,
+    update_data: TutoriaUpdate,
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    """
+    Permite a un tutor actualizar el estado de una tutoría.
+    Ej: 'solicitada' -> 'programada' (aceptar) o 'cancelada' (rechazar).
+    """
+    if current_user.rol != 'tutor':
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado.")
+
+    tutor_id = get_tutor_id_by_user_email(db, current_user.correo)
+    if not tutor_id:
+        raise HTTPException(status_code=404, detail="Perfil de tutor no encontrado.")
+
+    return tutoria_service.update_tutoria_status(
+        db=db,
+        tutoria_id=tutoria_id,
+        nuevo_estado=update_data.estado,
+        current_tutor_id=tutor_id
+    )

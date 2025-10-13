@@ -17,11 +17,12 @@ const DashboardEstudiante: React.FC = () => {
       try {
         setLoading(true);
         const data = await getStudentDashboard();
+        console.log("📊 Dashboard data cargada:", data);
         setDashboardData(data);
         setError(null);
       } catch (err) {
         setError('No se pudo cargar la información. Asegúrate de haber iniciado sesión y refresca la página.');
-        console.error(err);
+        console.error("❌ Error en fetchDashboardData:", err);
       } finally {
         setLoading(false);
       }
@@ -43,7 +44,9 @@ const DashboardEstudiante: React.FC = () => {
     return <div className="text-center text-red-500 p-12">{error || 'No se encontraron datos.'}</div>;
   }
   
-  const { kpis, nombre, historial } = dashboardData;
+  // CAMBIO CRÍTICO: Usar historial_academico en lugar de historial
+  const { kpis, nombre, historial_academico } = dashboardData;
+  
   const riskColorClasses = {
     green: 'bg-green-200 text-green-800',
     yellow: 'bg-yellow-200 text-yellow-800',
@@ -82,7 +85,7 @@ const DashboardEstudiante: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {historial.map((materia, index) => (
+                {historial_academico.map((materia, index) => (
                   <tr key={index}>
                     <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{materia.asignatura}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-gray-700">{materia.parcial1 ? Number(materia.parcial1).toFixed(2) : 'N/A'}</td>

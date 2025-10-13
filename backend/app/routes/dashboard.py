@@ -7,6 +7,8 @@ from typing import Dict, Any
 from app.db.database import get_db
 from app.dependencies import get_current_user
 from app.services import dashboard_service
+# --- NUEVAS IMPORTACIONES ---
+from app.services import tutor_dashboard_service
 from app.models.user import Usuario as UserModel
 
 router = APIRouter()
@@ -14,24 +16,56 @@ router = APIRouter()
 @router.get("/student", response_model=Dict[str, Any], tags=["Dashboard"])
 def get_student_dashboard(db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
     """
-    Retorna todos los datos para el Dashboard del Estudiante, incluyendo KPIs y historial.
-    Requiere un token de autenticación.
+    Retorna todos los datos para el Dashboard del Estudiante.
+    Requiere un token de autenticación de un usuario con rol 'estudiante'.
     """
     if current_user.rol != "estudiante":
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado: Se requiere rol de estudiante.")
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="Acceso denegado: Se requiere rol de estudiante."
+        )
 
-    # Obtenemos el ID del estudiante a partir del usuario autenticado
     estudiante_id = dashboard_service.get_student_id_by_user_email(db, current_user.correo)
-    
-    if not estudiante_id:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Perfil de estudiante no encontrado.")
 
-    # Obtenemos los KPIs usando el servicio
+    if not estudiante_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Perfil de estudiante no encontrado."
+        )
+
     dashboard_data = dashboard_service.get_student_kpis(db, estudiante_id)
-    
+
     return {
         "nombre": current_user.nombre,
         "kpis": dashboard_data["kpis"],
-        "historial": dashboard_data["historial_academico"],
-        "proxima_tutoria": None # La dejamos en None ya que la carga de tutorías falló.
+        "historial_academico": dashboard_data["historial_academico"]
+    }
+
+# --- NUEVO ENDPOINT PARA EL TUTOR ---
+@router.get("/tutor", response_model=Dict[str, Any], tags=["Dashboard"])
+def get_tutor_dashboard(db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
+    """
+    Retorna todos los datos para el Dashboard del Tutor.
+    Requiere un token de autenticación de un usuario con rol 'tutor'.
+    """
+    if current_user.rol != "tutor":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="Acceso denegado: Se requiere rol de tutor."
+        )
+
+    tutor_id = tutor_dashboard_service.get_tutor_id_by_user_email(db, current_user.correo)
+
+    if not tutor_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Perfil de tutor no encontrado."
+        )
+
+    dashboard_data = tutor_dashboard_service.get_tutor_dashboard_data(db, tutor_id)
+
+    return {
+        "nombre": current_user.nombre,
+        "cursos": dashboard_data["cursos"],
+        "tutorias_pendientes": dashboard_data["tutorias_pendientes"]
     }

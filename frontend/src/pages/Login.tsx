@@ -14,12 +14,14 @@ const Login: React.FC = () => {
     setError('');
     try {
       await login(correo, contrasena);
-      // Si el login es exitoso, recargamos la página para que la ruta protegida funcione
-      window.location.href = '/'; 
+      // --- CAMBIO CLAVE: NAVEGAMOS A LA RAÍZ ---
+      // El componente Home se encargará de redirigir al dashboard correcto.
+      navigate('/'); 
     } catch (err) {
       setError('Correo o contraseña incorrectos.');
     }
   };
+
 
   return (
     <div className="flex items-center justify-center h-screen bg-gray-200">
@@ -29,7 +31,7 @@ const Login: React.FC = () => {
           <div>
             <label className="block text-sm font-medium text-gray-700">Correo Electrónico</label>
             <input
-              type="email"
+              type="text"
               value={correo}
               onChange={(e) => setCorreo(e.target.value)}
               className="w-full px-3 py-2 mt-1 border rounded-md focus:ring-blue-500 focus:border-blue-500"

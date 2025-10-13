@@ -6,7 +6,7 @@ from app.models.tutor import Tutor
 from app.models.matricula import Matricula
 from app.models.estudiante import Estudiante
 from app.models.user import Usuario
-from app.schemas.tutoria import TutoriaCreate
+from app.schemas.tutoria import TutoriaCreate,TutoriaUpdate
 from fastapi import HTTPException
 
 class TutoriaService:
@@ -81,6 +81,30 @@ class TutoriaService:
         ).all()
         
         return tutorias
+
+    
+    # --- NUEVO MÉTODO PARA ACTUALIZAR EL ESTADO ---
+    def update_tutoria_status(self, db: Session, tutoria_id: int, nuevo_estado: str, current_tutor_id: int):
+        """
+        Actualiza el estado de una tutoría, verificando que el tutor que
+        realiza la acción es el tutor asignado a dicha tutoría.
+        """
+        tutoria = db.query(Tutoria).filter(Tutoria.id == tutoria_id).first()
+
+        if not tutoria:
+            raise HTTPException(status_code=404, detail="Tutoría no encontrada")
+
+        if tutoria.tutor_id != current_tutor_id:
+            raise HTTPException(status_code=403, detail="No autorizado para modificar esta tutoría")
+
+        estados_validos = ['realizada', 'cancelada', 'no_asistio', 'programada', 'solicitada']
+        if nuevo_estado not in estados_validos:
+            raise HTTPException(status_code=400, detail=f"Estado '{nuevo_estado}' no es válido.")
+
+        tutoria.estado = nuevo_estado
+        db.commit()
+        db.refresh(tutoria)
+        return tutoria
 
 # Instancia del servicio para usar en los endpoints
 tutoria_service = TutoriaService()

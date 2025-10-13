@@ -34,3 +34,7 @@ class Tutoria(TutoriaBase):
     
     class Config:
         from_attributes = True
+
+# --- NUEVO SCHEMA PARA ACTUALIZAR ESTADO ---
+class TutoriaUpdate(BaseModel):
+    estado: str

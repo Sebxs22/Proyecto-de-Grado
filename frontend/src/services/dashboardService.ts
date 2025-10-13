@@ -11,24 +11,25 @@ interface KpiData {
 interface HistorialAcademico {
     asignatura: string;
     parcial1: number | null;
-    parcial2: number | null; // Añadimos parcial2
+    parcial2: number | null;
     final: number | null;
     situacion: string | null;
     riesgo_nivel: 'BAJO' | 'MEDIO' | 'ALTO';
     riesgo_color: 'green' | 'yellow' | 'red';
-    matricula_id: number; // ID para agendar tutoría
-    tutor_id: number;     // ID para agendar tutoría
+    matricula_id: number;
+    tutor_id: number;
 }
 
 export interface StudentDashboard {
     nombre: string;
     kpis: KpiData;
-    historial: HistorialAcademico[];
+    historial_academico: HistorialAcademico[]; // Cambiado de "historial" a "historial_academico"
 }
 
 export const getStudentDashboard = async (): Promise<StudentDashboard> => {
     try {
         const response = await axiosClient.get('/dashboard/student');
+        console.log("Datos recibidos del backend:", response.data); // Para debug
         return response.data;
     } catch (error) {
         console.error("Error al obtener el dashboard del estudiante:", error);
