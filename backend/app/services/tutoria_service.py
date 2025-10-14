@@ -14,20 +14,30 @@ class TutoriaService:
     def create_tutoria(self, db: Session, tutoria: TutoriaCreate, estudiante_id: int):
         """
         Crea una nueva tutoría.
+        ✅ CORREGIDO: Eliminamos la información de zona horaria para evitar
+        la conversión UTC en el servidor (problema de 6 horas de diferencia).
         """
         try:
+            tutoria_data = tutoria.model_dump()
             
-            tutoria_dict = tutoria.dict()
-            tutoria_dict['estado'] = 'solicitada'  # ✅ FORZAR ESTADO
+            # --- 🛑 SOLUCIÓN AL PROBLEMA DE LA HORA 🛑 ---
+            # Removemos la información de timezone (tzinfo) para que SQLAlchemy 
+            # almacene la fecha/hora exactamente como viene del frontend (ej. 11:00 AM)
+            # sin ajustes automáticos de UTC.
+            if tutoria_data['fecha'].tzinfo is not None:
+                tutoria_data['fecha'] = tutoria_data['fecha'].replace(tzinfo=None)
+            
+            tutoria_data['estado'] = 'solicitada'
+            
             # Crear la tutoría
-            nueva_tutoria = Tutoria(**tutoria.dict())
+            nueva_tutoria = Tutoria(**tutoria_data)
             db.add(nueva_tutoria)
             db.commit()
             db.refresh(nueva_tutoria)
             
             # Recargar con todas las relaciones necesarias
             tutoria_completa = db.query(Tutoria).options(
-                joinedload(Tutoria.tutor).joinedload(Tutor.usuario),  # Correcto ✅
+                joinedload(Tutoria.tutor).joinedload(Tutor.usuario),
                 joinedload(Tutoria.matricula).joinedload(Matricula.estudiante).joinedload(Estudiante.usuario),
                 joinedload(Tutoria.matricula).joinedload(Matricula.asignatura)
             ).filter(Tutoria.id == nueva_tutoria.id).first()
@@ -37,6 +47,7 @@ class TutoriaService:
         except Exception as e:
             db.rollback()
             raise HTTPException(status_code=500, detail=f"Error al crear tutoría: {str(e)}")
+    
     
     def get_tutoria_by_id(self, db: Session, tutoria_id: int):
         """

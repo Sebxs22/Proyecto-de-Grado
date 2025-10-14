@@ -6,6 +6,7 @@ import DashboardEstudiante from './pages/DashboardEstudiante';
 import DashboardTutor from './pages/DashboardTutor';
 import Home from './pages/Home';
 import { useAuth } from './context/AuthContext'; // ✅ AGREGADO
+import MisTutorias from './pages/MisTutorias'; // ✅ AGREGADO
 
 // Guardia para proteger rutas
 const PrivateRoutes = () => {
@@ -31,6 +32,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/dashboard/estudiante" element={<DashboardEstudiante />} />
           <Route path="/dashboard/tutor" element={<DashboardTutor />} />
+          <Route path="/tutorias" element={<MisTutorias />} /> 
         </Route>
       </Routes>
     </BrowserRouter>

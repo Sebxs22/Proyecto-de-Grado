@@ -1,8 +1,8 @@
 // frontend/src/services/tutoriaService.ts
 import axiosClient from '../api/axiosClient';
 
-// La información que necesitamos para crear una tutoría
-interface TutoriaPayload {
+// ✅ CORRECCIÓN: Se añade 'export'
+export interface TutoriaPayload { 
   matricula_id: number;
   tutor_id: number;
   fecha: string; // Formato ISO: "2025-10-25T14:00:00"

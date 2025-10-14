@@ -1,5 +1,4 @@
 -- backend/app/db/init.sql
-
 -- Creamos un "esquema" o espacio de trabajo para mantener todo ordenado.
 CREATE SCHEMA IF NOT EXISTS tutorias_unach;
 SET search_path TO tutorias_unach;
@@ -13,7 +12,8 @@ CREATE TABLE IF NOT EXISTS usuarios (
     correo VARCHAR(150) UNIQUE NOT NULL,
     hashed_password VARCHAR(255) NOT NULL,
     rol VARCHAR(20) NOT NULL CHECK (rol IN ('estudiante', 'tutor', 'coordinador')),
-    fecha_creacion TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+    -- ✅ CORRECCIÓN: TIMESTAMP sin timezone
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     activo BOOLEAN DEFAULT TRUE
 );
 
@@ -94,13 +94,18 @@ CREATE TABLE IF NOT EXISTS tutorias (
     id SERIAL PRIMARY KEY,
     matricula_id INTEGER REFERENCES matriculas(id) ON DELETE SET NULL,
     tutor_id INTEGER NOT NULL REFERENCES tutores(id) ON DELETE CASCADE,
-    fecha TIMESTAMPTZ NOT NULL,
+    
+    -- ✅ CORRECCIÓN CRÍTICA: TIMESTAMP sin TZ (era TIMESTAMPTZ)
+    fecha TIMESTAMP NOT NULL,
+    
     duracion_min INTEGER NOT NULL CHECK (duracion_min > 0),
     tema TEXT,
     modalidad VARCHAR(20) CHECK (modalidad IN ('Presencial', 'Virtual', 'Híbrida')),
-    estado VARCHAR(20) NOT NULL CHECK (estado IN ('realizada', 'cancelada', 'no_asistio', 'programada',  'solicitada')),
+    estado VARCHAR(20) NOT NULL CHECK (estado IN ('realizada', 'cancelada', 'no_asistio', 'programada', 'solicitada')),
     observaciones_tutor TEXT,
-    fecha_registro TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    
+    -- ✅ CORRECCIÓN: TIMESTAMP sin TZ (era TIMESTAMPTZ)
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- -----------------------------------------------------
@@ -111,7 +116,9 @@ CREATE TABLE IF NOT EXISTS evaluaciones (
     tutoria_id INTEGER UNIQUE NOT NULL REFERENCES tutorias(id) ON DELETE CASCADE,
     estrellas INTEGER NOT NULL CHECK (estrellas BETWEEN 1 AND 5),
     comentario_estudiante TEXT,
-    fecha TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+    
+    -- ✅ CORRECCIÓN: TIMESTAMP sin TZ (era TIMESTAMPTZ)
+    fecha TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Índices para búsquedas rápidas
@@ -119,4 +126,4 @@ CREATE INDEX IF NOT EXISTS idx_tutorias_fecha ON tutorias(fecha);
 CREATE INDEX IF NOT EXISTS idx_usuarios_rol ON usuarios(rol);
 CREATE INDEX IF NOT EXISTS idx_matriculas_estudiante ON matriculas(estudiante_id);
 
--- COMMENT ON SCHEMA tutorias_unach IS 'Esquema v2.1 para el sistema de tutorías UNACH. Incluye tutor_id en matrículas para soportar múltiples paralelos.';
+-- COMMENT ON SCHEMA tutorias_unach IS 'Esquema v2.2 para el sistema de tutorías UNACH. Corregido timezone en fechas.';

@@ -12,6 +12,7 @@ def get_tutor_id_by_user_email(db: Session, email: str) -> Optional[int]:
         JOIN tutorias_unach.usuarios u ON t.usuario_id = u.id
         WHERE u.correo = :email;
     """)
+    # Usamos scalar_one_or_none para obtener solo el valor de la columna 'id'
     result = db.execute(query, {"email": email}).scalar_one_or_none()
     return result
 
@@ -20,7 +21,7 @@ def get_tutor_dashboard_data(db: Session, tutor_id: int) -> Dict[str, Any]:
     Obtiene los datos para el dashboard del tutor, incluyendo sus cursos,
     estudiantes, notas y las tutorías que tiene pendientes de aceptar.
     """
-    # Consulta para obtener los cursos y estudiantes asignados al tutor
+    # Consulta 1: Datos detallados de cursos y estudiantes asignados
     query_cursos = text("""
         SELECT
             pa.nombre AS periodo,
@@ -42,7 +43,7 @@ def get_tutor_dashboard_data(db: Session, tutor_id: int) -> Dict[str, Any]:
     """)
     cursos_result = db.execute(query_cursos, {"tutor_id": tutor_id}).mappings().all()
 
-    # Consulta para obtener las tutorías solicitadas que el tutor debe gestionar
+    # Consulta 2: Tutorías solicitadas que el tutor debe gestionar (se mantiene igual)
     query_tutorias = text("""
         SELECT
             t.id AS tutoria_id,

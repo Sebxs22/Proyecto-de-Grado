@@ -1,14 +1,27 @@
 // frontend/src/pages/DashboardTutor.tsx
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { getTutorDashboard, TutorDashboard, actualizarEstadoTutoria } from '../services/tutorDashboardService';
+
+// ✅ Nueva función para parsear la nota de forma segura
+const safeParseFloat = (value: number | null | undefined): number => {
+    // Si es nulo o indefinido, devuelve 0 para el cálculo (y se ignora en la cuenta)
+    if (value === null || value === undefined) return 0;
+    
+    // Si ya es un número, lo devuelve. Si es un string, lo convierte.
+    const num = Number(value);
+    
+    // Devuelve 0 si la conversión resulta en NaN (para evitar que NaN contamine la suma)
+    return isNaN(num) ? 0 : num;
+};
+
 
 const DashboardTutor: React.FC = () => {
   const [dashboardData, setDashboardData] = useState<TutorDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       const data = await getTutorDashboard();
@@ -21,11 +34,11 @@ const DashboardTutor: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     fetchDashboardData();
-  }, []);
+  }, [fetchDashboardData]);
 
   const handleUpdateTutoria = async (tutoriaId: number, estado: 'programada' | 'cancelada') => {
     const action = estado === 'programada' ? 'aceptar' : 'cancelar';
@@ -59,14 +72,22 @@ const DashboardTutor: React.FC = () => {
     return acc;
   }, {} as Record<string, { periodo: string; asignatura: string; estudiantes: typeof cursos }>);
 
-  // Calcular estadísticas por curso
+  // ✅ CORREGIDO: Lógica para calcular estadísticas, usando safeParseFloat
   const calcularEstadisticas = (estudiantes: typeof cursos) => {
-    const conNotas = estudiantes.filter(e => e.final !== null);
+    // Solo contamos a los estudiantes que tienen una nota final registrada
+    const estudiantesConNotaFinal = estudiantes.filter(e => e.final !== null);
+    
+    // Convertimos las notas a número de forma segura para la suma
+    const notasValidas = estudiantesConNotaFinal
+        .map(e => safeParseFloat(e.final))
+        .filter(n => n > 0 || n === 0); // Aseguramos que el parseo fue exitoso
+        
     const aprobados = estudiantes.filter(e => e.situacion === 'APROBADO').length;
     const reprobados = estudiantes.filter(e => e.situacion === 'REPROBADO').length;
-    const promedioFinal = conNotas.length > 0 
-      ? (conNotas.reduce((sum, e) => sum + (e.final || 0), 0) / conNotas.length).toFixed(2)
-      : 'N/A';
+    
+    const promedioFinal = notasValidas.length > 0
+        ? (notasValidas.reduce((sum, n) => sum + n, 0) / notasValidas.length).toFixed(2)
+        : 'N/A'; // Si no hay notas finales válidas, devuelve N/A
     
     return {
       total: estudiantes.length,
