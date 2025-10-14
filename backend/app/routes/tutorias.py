@@ -5,8 +5,9 @@ from typing import List
 from app.db.database import get_db
 from app.dependencies import get_current_user
 from app.schemas.tutoria import Tutoria, TutoriaCreate, TutoriaUpdate
-from app.services.tutoria_service import tutoria_service  # ✅ CORREGIDO
-from app.services.tutor_dashboard_service import get_tutor_id_by_user_email # <--- AÑADE ESTA LÍNEA
+from app.services.tutoria_service import tutoria_service
+# ✅ CORREGIDO: Importamos el servicio centralizado de perfiles
+from app.services.profile_service import get_tutor_id_by_user_email, get_student_id_by_user_email 
 from app.models.user import Usuario as UserModel
 
 router = APIRouter()
@@ -21,7 +22,15 @@ def agendar_nueva_tutoria(
     Endpoint para que un estudiante agende una nueva tutoría.
     El estado inicial será 'solicitada'.
     """
-    return tutoria_service.create_tutoria(db=db, tutoria=tutoria, estudiante_id=current_user.id)
+    if current_user.rol != 'estudiante':
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo los estudiantes pueden agendar tutorías.")
+    
+    # ✅ CORREGIDO: Obtenemos el ID del perfil de estudiante
+    estudiante_id = get_student_id_by_user_email(db, current_user.correo)
+    if not estudiante_id:
+        raise HTTPException(status_code=404, detail="Perfil de estudiante no encontrado.")
+
+    return tutoria_service.create_tutoria(db=db, tutoria=tutoria, estudiante_id=estudiante_id)
 
 @router.get("/", response_model=List[Tutoria])
 def obtener_mis_tutorias(
@@ -32,11 +41,22 @@ def obtener_mis_tutorias(
     Obtiene la lista de tutorías para el usuario autenticado.
     """
     if current_user.rol == 'estudiante':
-        return tutoria_service.get_tutorias_by_estudiante(db=db, estudiante_id=current_user.id)  # ✅ CORREGIDO
-    # Aquí iría la lógica para el tutor
+        # ✅ CORREGIDO: Usamos el ID del perfil de estudiante
+        estudiante_id = get_student_id_by_user_email(db, current_user.correo)
+        if not estudiante_id:
+             raise HTTPException(status_code=404, detail="Perfil de estudiante no encontrado.")
+        return tutoria_service.get_tutorias_by_estudiante(db=db, estudiante_id=estudiante_id)
+        
+    elif current_user.rol == 'tutor':
+        # ✅ AGREGADO: Lógica para el tutor
+        tutor_id = get_tutor_id_by_user_email(db, current_user.correo)
+        if not tutor_id:
+            raise HTTPException(status_code=404, detail="Perfil de tutor no encontrado.")
+        return tutoria_service.get_tutorias_by_tutor(db=db, tutor_id=tutor_id)
+
     return []
 
-    # --- NUEVO ENDPOINT PARA ACTUALIZAR ESTADO ---
+    # --- ENDPOINT PARA ACTUALIZAR ESTADO (se mantiene igual, ya usaba el ID de perfil) ---
 @router.patch("/{tutoria_id}/estado", response_model=Tutoria)
 def actualizar_estado_tutoria(
     tutoria_id: int,

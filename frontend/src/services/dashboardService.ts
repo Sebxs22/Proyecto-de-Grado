@@ -18,6 +18,7 @@ interface HistorialAcademico {
     riesgo_color: 'green' | 'yellow' | 'red';
     matricula_id: number;
     tutor_id: number;
+    tutor_nombre: string; // ✅ AGREGADO
 }
 
 export interface StudentDashboard {

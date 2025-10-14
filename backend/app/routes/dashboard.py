@@ -7,8 +7,9 @@ from typing import Dict, Any
 from app.db.database import get_db
 from app.dependencies import get_current_user
 from app.services import dashboard_service
-# --- NUEVAS IMPORTACIONES ---
 from app.services import tutor_dashboard_service
+# ✅ CORREGIDO: Importar el servicio centralizado de perfiles
+from app.services.profile_service import get_student_id_by_user_email, get_tutor_id_by_user_email 
 from app.models.user import Usuario as UserModel
 
 router = APIRouter()
@@ -25,7 +26,8 @@ def get_student_dashboard(db: Session = Depends(get_db), current_user: UserModel
             detail="Acceso denegado: Se requiere rol de estudiante."
         )
 
-    estudiante_id = dashboard_service.get_student_id_by_user_email(db, current_user.correo)
+    # ✅ CORREGIDO: Usamos la función del profile_service
+    estudiante_id = get_student_id_by_user_email(db, current_user.correo)
 
     if not estudiante_id:
         raise HTTPException(
@@ -41,7 +43,7 @@ def get_student_dashboard(db: Session = Depends(get_db), current_user: UserModel
         "historial_academico": dashboard_data["historial_academico"]
     }
 
-# --- NUEVO ENDPOINT PARA EL TUTOR ---
+# --- ENDPOINT PARA EL TUTOR ---
 @router.get("/tutor", response_model=Dict[str, Any], tags=["Dashboard"])
 def get_tutor_dashboard(db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
     """
@@ -54,7 +56,8 @@ def get_tutor_dashboard(db: Session = Depends(get_db), current_user: UserModel =
             detail="Acceso denegado: Se requiere rol de tutor."
         )
 
-    tutor_id = tutor_dashboard_service.get_tutor_id_by_user_email(db, current_user.correo)
+    # ✅ CORREGIDO: Usamos la función del profile_service
+    tutor_id = get_tutor_id_by_user_email(db, current_user.correo)
 
     if not tutor_id:
         raise HTTPException(

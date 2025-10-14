@@ -2,9 +2,11 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { login } from '../services/authService';
+import { useAuth } from '../context/AuthContext'; // ✅ AGREGADO
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
+  const { checkAuth } = useAuth(); // ✅ AGREGADO
   const [correo, setCorreo] = useState('');
   const [contrasena, setContrasena] = useState('');
   const [error, setError] = useState('');
@@ -14,8 +16,10 @@ const Login: React.FC = () => {
     setError('');
     try {
       await login(correo, contrasena);
-      // --- CAMBIO CLAVE: NAVEGAMOS A LA RAÍZ ---
-      // El componente Home se encargará de redirigir al dashboard correcto.
+      // ✅ IMPORTANTE: Forzamos la actualización del estado del usuario en el Context
+      await checkAuth(); 
+      
+      // Navegamos a la raíz. Home.tsx ahora podrá leer el rol inmediatamente del context.
       navigate('/'); 
     } catch (err) {
       setError('Correo o contraseña incorrectos.');

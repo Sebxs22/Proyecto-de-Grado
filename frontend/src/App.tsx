@@ -1,14 +1,22 @@
 // frontend/src/App.tsx
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import Login from './pages/Login';
-import MainLayout from './layout/MainLayout'; // Asumimos que tienes este archivo
-import DashboardEstudiante from './pages/DashboardEstudiante'; // Y este también
+import MainLayout from './layout/MainLayout';
+import DashboardEstudiante from './pages/DashboardEstudiante'; 
 import DashboardTutor from './pages/DashboardTutor';
 import Home from './pages/Home';
+import { useAuth } from './context/AuthContext'; // ✅ AGREGADO
 
 // Guardia para proteger rutas
 const PrivateRoutes = () => {
-  const isAuthenticated = !!localStorage.getItem('accessToken');
+  const { isAuthenticated, loading } = useAuth(); // ✅ USANDO CONTEXT
+
+  if (loading) {
+    // Muestra un loader mientras se verifica el token
+    return <div className="text-center p-12">Verificando sesión...</div>; 
+  }
+
+  // Si no está autenticado, redirige a login
   return isAuthenticated ? <MainLayout /> : <Navigate to="/login" />;
 };
 
@@ -20,10 +28,7 @@ function App() {
         <Route path="/login" element={<Login />} />
 
         <Route element={<PrivateRoutes />}>
-          {/* AHORA LA RUTA RAÍZ VA A HOME PARA QUE DECIDA A DÓNDE IR */}
           <Route path="/" element={<Home />} />
-
-          {/* MANTENEMOS LAS RUTAS ESPECÍFICAS DE LOS DASHBOARDS */}
           <Route path="/dashboard/estudiante" element={<DashboardEstudiante />} />
           <Route path="/dashboard/tutor" element={<DashboardTutor />} />
         </Route>

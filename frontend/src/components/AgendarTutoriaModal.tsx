@@ -6,10 +6,12 @@ interface Props {
   isOpen: boolean;
   onClose: () => void;
   matriculaId: number | null;
-  tutorId: number | null; // Asumimos que el tutor se asigna automáticamente por ahora
+  tutorId: number | null; 
+  tutorNombre: string | null; // ✅ AGREGADO
+  onSuccess: () => void; // ✅ AGREGADO para refrescar el dashboard
 }
 
-const AgendarTutoriaModal: React.FC<Props> = ({ isOpen, onClose, matriculaId, tutorId }) => {
+const AgendarTutoriaModal: React.FC<Props> = ({ isOpen, onClose, matriculaId, tutorId, tutorNombre, onSuccess }) => {
   const [tema, setTema] = useState('');
   const [fecha, setFecha] = useState('');
   const [hora, setHora] = useState('');
@@ -33,19 +35,26 @@ const AgendarTutoriaModal: React.FC<Props> = ({ isOpen, onClose, matriculaId, tu
         modalidad,
       };
       await crearTutoria(payload);
-      alert('¡Tutoría solicitada con éxito!');
-      onClose(); // Cerramos el modal
+      alert('¡Tutoría solicitada con éxito! El tutor la revisará pronto.');
+      onClose(); 
+      onSuccess(); // ✅ Recarga los datos del dashboard
     } catch (err) {
-      setError('No se pudo agendar la tutoría. Intenta de nuevo.');
+      setError('No se pudo agendar la tutoría. Intenta de nuevo. Asegúrate que la fecha no esté en el pasado.');
     }
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center">
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50">
       <div className="bg-white p-8 rounded-lg shadow-xl w-full max-w-lg">
         <h2 className="text-2xl font-bold mb-4">Agendar Nueva Tutoría</h2>
+        
+        {/* ✅ AGREGADO: Mostrar el tutor asignado */}
+        <p className="mb-4 p-3 bg-blue-50 text-blue-800 rounded-md text-sm">
+            Tutor Asignado: <span className="font-semibold">{tutorNombre || 'Sin asignar'}</span>
+        </p>
+
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium">Tema de la Tutoría</label>

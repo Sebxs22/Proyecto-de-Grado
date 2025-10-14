@@ -1,6 +1,6 @@
 // frontend/src/pages/DashboardEstudiante.tsx
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react'; // ✅ MODIFICADO
 import { getStudentDashboard, StudentDashboard } from '../services/dashboardService';
 import AgendarTutoriaModal from '../components/AgendarTutoriaModal';
 
@@ -11,29 +11,42 @@ const DashboardEstudiante: React.FC = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedMatricula, setSelectedMatricula] = useState<number | null>(null);
   const [selectedTutor, setSelectedTutor] = useState<number | null>(null);
+  const [selectedTutorNombre, setSelectedTutorNombre] = useState<string | null>(null); // ✅ AGREGADO
 
-  useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-        const data = await getStudentDashboard();
-        console.log("📊 Dashboard data cargada:", data);
-        setDashboardData(data);
-        setError(null);
-      } catch (err) {
-        setError('No se pudo cargar la información. Asegúrate de haber iniciado sesión y refresca la página.');
-        console.error("❌ Error en fetchDashboardData:", err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchDashboardData();
+  // ✅ CORREGIDO: Usamos useCallback para que la función sea estable
+  const fetchDashboardData = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await getStudentDashboard();
+      console.log("📊 Dashboard data cargada:", data);
+      setDashboardData(data);
+      setError(null);
+    } catch (err) {
+      setError('No se pudo cargar la información. Asegúrate de haber iniciado sesión y refresca la página.');
+      console.error("❌ Error en fetchDashboardData:", err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const handleAgendarClick = (matriculaId: number, tutorId: number) => {
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  // ✅ MODIFICADO: Ahora recibe el nombre del tutor
+  const handleAgendarClick = (matriculaId: number, tutorId: number, tutorNombre: string) => {
     setSelectedMatricula(matriculaId);
     setSelectedTutor(tutorId);
+    setSelectedTutorNombre(tutorNombre); // ✅ AGREGADO
     setIsModalOpen(true);
+  };
+  
+  // Función para manejar el cierre y recarga tras agendar
+  const handleModalClose = () => {
+    setIsModalOpen(false);
+    setSelectedMatricula(null);
+    setSelectedTutor(null);
+    setSelectedTutorNombre(null);
   };
 
   if (loading) {
@@ -44,7 +57,6 @@ const DashboardEstudiante: React.FC = () => {
     return <div className="text-center text-red-500 p-12">{error || 'No se encontraron datos.'}</div>;
   }
   
-  // CAMBIO CRÍTICO: Usar historial_academico en lugar de historial
   const { kpis, nombre, historial_academico } = dashboardData;
   
   const riskColorClasses = {
@@ -79,6 +91,7 @@ const DashboardEstudiante: React.FC = () => {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Parcial 1</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Parcial 2</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nota Final</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tutor Asignado</th> {/* ✅ AGREGADO */}
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nivel de Riesgo</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
@@ -91,6 +104,7 @@ const DashboardEstudiante: React.FC = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-gray-700">{materia.parcial1 ? Number(materia.parcial1).toFixed(2) : 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-gray-700">{materia.parcial2 ? Number(materia.parcial2).toFixed(2) : 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-nowrap font-bold text-gray-900">{materia.final ? Number(materia.final).toFixed(2) : 'N/A'}</td>
+                    <td className="px-6 py-4 whitespace-nowrap text-gray-700">{materia.tutor_nombre}</td> {/* ✅ MOSTRANDO EL NOMBRE */}
                     <td className="px-6 py-4 whitespace-nowrap text-gray-700">{materia.situacion || 'N/A'}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${riskColorClasses[materia.riesgo_color]}`}>
@@ -99,10 +113,11 @@ const DashboardEstudiante: React.FC = () => {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button 
-                        onClick={() => handleAgendarClick(materia.matricula_id, materia.tutor_id)}
-                        className="text-blue-600 hover:text-blue-900 font-semibold"
+                        onClick={() => handleAgendarClick(materia.matricula_id, materia.tutor_id, materia.tutor_nombre)} // ✅ PASAMOS EL NOMBRE
+                        className="text-blue-600 hover:text-blue-900 font-semibold disabled:text-gray-400"
+                        disabled={materia.tutor_id === null} // Deshabilitar si no hay tutor
                       >
-                        Agendar Tutoría
+                        {materia.tutor_id ? 'Agendar Tutoría' : 'Sin Tutor'}
                       </button>
                     </td>
                   </tr>
@@ -115,9 +130,11 @@ const DashboardEstudiante: React.FC = () => {
 
       <AgendarTutoriaModal 
         isOpen={isModalOpen}
-        onClose={() => setIsModalOpen(false)}
+        onClose={handleModalClose} // ✅ Usamos la nueva función de cierre
         matriculaId={selectedMatricula}
         tutorId={selectedTutor}
+        tutorNombre={selectedTutorNombre} // ✅ PASAMOS EL NOMBRE AL MODAL
+        onSuccess={fetchDashboardData} // ✅ Callback para recargar los datos
       />
     </>
   );
