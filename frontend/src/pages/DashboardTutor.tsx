@@ -1,7 +1,8 @@
 // frontend/src/pages/DashboardTutor.tsx
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { getTutorDashboard, TutorDashboard, actualizarEstadoTutoria } from '../services/tutorDashboardService';
+import { getTutorDashboard, TutorDashboard } from '../services/tutorDashboardService';
+// Ya no necesitamos actualizarEstadoTutoria aquí, se mueve a TutoriasTutor.tsx
 
 // ✅ Nueva función para parsear la nota de forma segura
 const safeParseFloat = (value: number | null | undefined): number => {
@@ -40,18 +41,8 @@ const DashboardTutor: React.FC = () => {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
-  const handleUpdateTutoria = async (tutoriaId: number, estado: 'programada' | 'cancelada') => {
-    const action = estado === 'programada' ? 'aceptar' : 'cancelar';
-    if (!window.confirm(`¿Estás seguro de que quieres ${action} esta tutoría?`)) return;
-
-    try {
-      await actualizarEstadoTutoria(tutoriaId, estado);
-      alert(`Tutoría actualizada con éxito.`);
-      fetchDashboardData();
-    } catch (err) {
-      alert('Error al actualizar la tutoría.');
-    }
-  };
+  // ✅ ELIMINADA: La función handleUpdateTutoria ya no es necesaria aquí.
+  // La gestión de tutorías ahora se hace en TutoriasTutor.tsx
 
   if (loading) return <div className="text-center p-12">Cargando dashboard del tutor...</div>;
   if (error || !dashboardData) return <div className="text-center text-red-500 p-12">{error || 'No se encontraron datos.'}</div>;
@@ -101,65 +92,25 @@ const DashboardTutor: React.FC = () => {
     <div className="space-y-8">
       <h1 className="text-3xl font-bold text-gray-800">Bienvenido, Tutor {nombre}</h1>
 
-      {/* Sección de Tutorías Pendientes */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <h2 className="text-2xl font-bold text-gray-800 mb-4">Tutorías por Aprobar</h2>
-        {tutorias_pendientes.length > 0 ? (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead className="bg-gray-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estudiante</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Asignatura</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha Solicitada</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Tema</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Modalidad</th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {tutorias_pendientes.map((tutoria) => (
-                  <tr key={tutoria.tutoria_id}>
-                    <td className="px-6 py-4 whitespace-nowrap">{tutoria.estudiante_nombre}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">{tutoria.asignatura}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">{new Date(tutoria.fecha).toLocaleString()}</td>
-                    <td className="px-6 py-4">{tutoria.tema}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2 py-1 text-xs rounded-full ${
-                        tutoria.modalidad === 'presencial' 
-                          ? 'bg-blue-100 text-blue-800' 
-                          : 'bg-purple-100 text-purple-800'
-                      }`}>
-                        {tutoria.modalidad}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={() => handleUpdateTutoria(tutoria.tutoria_id, 'programada')} 
-                          className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 transition-colors"
-                        >
-                          Aceptar
-                        </button>
-                        <button 
-                          onClick={() => handleUpdateTutoria(tutoria.tutoria_id, 'cancelada')} 
-                          className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 transition-colors"
-                        >
-                          Rechazar
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="text-gray-600">No tienes tutorías pendientes de aprobación.</p>
-        )}
+      {/* ✅ MODIFICACIÓN: Mostrar resumen de tutorías pendientes en el Dashboard */}
+      <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-yellow-500">
+          <h2 className="text-2xl font-bold text-gray-800 mb-2">Resumen de Tutorías</h2>
+          {tutorias_pendientes.length > 0 ? (
+              <p className="text-yellow-600 font-semibold text-lg">
+                  Tienes <span className="text-3xl font-extrabold">{tutorias_pendientes.length}</span> solicitudes pendientes de aprobación.
+                  <button 
+                      onClick={() => window.location.href = '/tutorias/tutor'}
+                      className="ml-4 text-blue-600 hover:text-blue-800 font-medium underline"
+                  >
+                      Ir a Gestión
+                  </button>
+              </p>
+          ) : (
+              <p className="text-gray-600">No tienes tutorías pendientes de aprobación.</p>
+          )}
       </div>
 
-      {/* Sección de Cursos y Estudiantes */}
+      {/* Sección de Cursos y Estudiantes (Se mantiene) */}
       <div className="bg-white p-6 rounded-lg shadow-md">
         <h2 className="text-2xl font-bold text-gray-800 mb-6">Mis Cursos y Estudiantes</h2>
         

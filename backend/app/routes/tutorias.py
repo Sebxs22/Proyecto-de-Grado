@@ -6,7 +6,7 @@ from app.db.database import get_db
 from app.dependencies import get_current_user
 from app.schemas.tutoria import Tutoria, TutoriaCreate, TutoriaUpdate
 from app.services.tutoria_service import tutoria_service
-# ✅ CORREGIDO: Importamos el servicio centralizado de perfiles
+# ✅ Mantenemos la importación del servicio centralizado de perfiles
 from app.services.profile_service import get_tutor_id_by_user_email, get_student_id_by_user_email 
 from app.models.user import Usuario as UserModel
 
@@ -25,11 +25,15 @@ def agendar_nueva_tutoria(
     if current_user.rol != 'estudiante':
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Solo los estudiantes pueden agendar tutorías.")
     
-    # ✅ CORREGIDO: Obtenemos el ID del perfil de estudiante
+    # ✅ CORRECCIÓN CRÍTICA: OBTENER ID DE PERFIL DE ESTUDIANTE
+    # No usamos current_user.id (ID de Usuario) sino el ID de la tabla estudiantes.
     estudiante_id = get_student_id_by_user_email(db, current_user.correo)
+    
     if not estudiante_id:
         raise HTTPException(status_code=404, detail="Perfil de estudiante no encontrado.")
 
+    # El servicio de tutoría solo necesita el ID de perfil si se usa para validación futura,
+    # pero para la creación directa del objeto Tutoria, solo usamos el payload.
     return tutoria_service.create_tutoria(db=db, tutoria=tutoria, estudiante_id=estudiante_id)
 
 @router.get("/", response_model=List[Tutoria])
@@ -41,14 +45,14 @@ def obtener_mis_tutorias(
     Obtiene la lista de tutorías para el usuario autenticado.
     """
     if current_user.rol == 'estudiante':
-        # ✅ CORREGIDO: Usamos el ID del perfil de estudiante
+        # ✅ CORRECCIÓN CRÍTICA: OBTENER ID DE PERFIL DE ESTUDIANTE
         estudiante_id = get_student_id_by_user_email(db, current_user.correo)
         if not estudiante_id:
              raise HTTPException(status_code=404, detail="Perfil de estudiante no encontrado.")
         return tutoria_service.get_tutorias_by_estudiante(db=db, estudiante_id=estudiante_id)
         
     elif current_user.rol == 'tutor':
-        # ✅ AGREGADO: Lógica para el tutor
+        # ✅ ID de tutoría ya se maneja correctamente (ID de perfil)
         tutor_id = get_tutor_id_by_user_email(db, current_user.correo)
         if not tutor_id:
             raise HTTPException(status_code=404, detail="Perfil de tutor no encontrado.")

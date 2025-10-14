@@ -29,13 +29,22 @@ const Sidebar: React.FC = () => {
             >
                 Dashboard
             </li>
-            {/* ✅ AGREGADO: Enlace a Mis Tutorías solo para estudiantes */}
+            {/* Enlace a Mis Tutorías para estudiantes */}
             {user?.rol === 'estudiante' && (
                 <li
                     className="mb-2 p-2 rounded hover:bg-gray-700 cursor-pointer transition-colors"
-                    onClick={() => navigate('/tutorias')}
+                    onClick={() => navigate('/tutorias/estudiante')} 
                 >
                     Mis Tutorías
+                </li>
+            )}
+            {/* ✅ AGREGADO: Enlace a Gestión de Tutorías para tutores */}
+            {user?.rol === 'tutor' && (
+                <li
+                    className="mb-2 p-2 rounded hover:bg-gray-700 cursor-pointer transition-colors"
+                    onClick={() => navigate('/tutorias/tutor')} 
+                >
+                    Gestión de Tutorías
                 </li>
             )}
           </ul>
