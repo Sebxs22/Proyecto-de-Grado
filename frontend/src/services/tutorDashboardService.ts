@@ -27,6 +27,7 @@ export interface TutorDashboard {
   nombre: string;
   cursos: CursoTutor[];
   tutorias_pendientes: TutoriaPendiente[];
+  average_rating: number;
 }
 
 // --- Funciones del Servicio ---
@@ -47,9 +48,22 @@ export const getTutorDashboard = async (): Promise<TutorDashboard> => {
 /**
  * Actualiza el estado de una tutoría a 'programada' (aceptar) o 'cancelada' (rechazar).
  */
-export const actualizarEstadoTutoria = async (tutoriaId: number, estado: 'programada' | 'cancelada') => {
+export const actualizarEstadoTutoria = async (
+    tutoriaId: number, 
+    estadoFinal: 'programada' | 'cancelada' | 'realizada' | 'no_asistio', 
+    enlaceReunion: string | null = null // ✅ CORREGIDO: AGREGAR ARGUMENTO OPCIONAL
+) => {
   try {
-    const response = await axiosClient.patch(`/tutorias/${tutoriaId}/estado`, { estado });
+    const payload: { estado: string; enlace_reunion?: string } = {
+        estado: estadoFinal,
+    };
+    
+    // Solo incluimos el enlace si es proporcionado
+    if (enlaceReunion) {
+        payload.enlace_reunion = enlaceReunion;
+    }
+    
+    const response = await axiosClient.patch(`/tutorias/${tutoriaId}/estado`, payload);
     return response.data;
   } catch (error) {
     console.error("Error al actualizar la tutoría:", error);

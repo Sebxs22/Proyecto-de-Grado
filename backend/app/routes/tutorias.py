@@ -69,8 +69,9 @@ def actualizar_estado_tutoria(
     current_user: UserModel = Depends(get_current_user)
 ):
     """
-    Permite a un tutor actualizar el estado de una tutoría.
-    Ej: 'solicitada' -> 'programada' (aceptar) o 'cancelada' (rechazar).
+    Permite a un tutor:
+    1. Aceptar/Rechazar una solicitud (solicitada -> programada/cancelada).
+    2. Marcar como realizada/no asistida (programada -> realizada/no_asistio).
     """
     if current_user.rol != 'tutor':
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acceso denegado.")
@@ -79,9 +80,11 @@ def actualizar_estado_tutoria(
     if not tutor_id:
         raise HTTPException(status_code=404, detail="Perfil de tutor no encontrado.")
 
+    # ✅ CORREGIDO: Extraemos el estado y el enlace del payload
     return tutoria_service.update_tutoria_status(
         db=db,
         tutoria_id=tutoria_id,
         nuevo_estado=update_data.estado,
-        current_tutor_id=tutor_id
+        current_tutor_id=tutor_id,
+        enlace_reunion=update_data.enlace_reunion # ✅ PASAMOS EL ENLACE
     )

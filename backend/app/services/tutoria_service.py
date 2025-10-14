@@ -8,6 +8,8 @@ from app.models.estudiante import Estudiante
 from app.models.user import Usuario
 from app.schemas.tutoria import TutoriaCreate,TutoriaUpdate
 from fastapi import HTTPException
+from typing import Optional # ✅ CORREGIDO: Importar Optional
+from fastapi import status 
 
 class TutoriaService:
     
@@ -95,10 +97,10 @@ class TutoriaService:
 
     
     # --- NUEVO MÉTODO PARA ACTUALIZAR EL ESTADO ---
-    def update_tutoria_status(self, db: Session, tutoria_id: int, nuevo_estado: str, current_tutor_id: int):
+    def update_tutoria_status(self, db: Session, tutoria_id: int, nuevo_estado: str, current_tutor_id: int, enlace_reunion: Optional[str] = None):
         """
-        Actualiza el estado de una tutoría, verificando que el tutor que
-        realiza la acción es el tutor asignado a dicha tutoría.
+        Actualiza el estado de una tutoría, incluyendo la lógica para aceptar
+        (programada), rechazar (cancelada) y finalizar (realizada/no_asistio).
         """
         tutoria = db.query(Tutoria).filter(Tutoria.id == tutoria_id).first()
 
@@ -106,16 +108,43 @@ class TutoriaService:
             raise HTTPException(status_code=404, detail="Tutoría no encontrada")
 
         if tutoria.tutor_id != current_tutor_id:
-            raise HTTPException(status_code=403, detail="No autorizado para modificar esta tutoría")
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="No autorizado para modificar esta tutoría")
 
         estados_validos = ['realizada', 'cancelada', 'no_asistio', 'programada', 'solicitada']
         if nuevo_estado not in estados_validos:
-            raise HTTPException(status_code=400, detail=f"Estado '{nuevo_estado}' no es válido.")
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Estado '{nuevo_estado}' no es válido.")
 
-        tutoria.estado = nuevo_estado
+        # --- Lógica de ACEPTACIÓN (solicitada -> programada) ---
+        if nuevo_estado == 'programada':
+            if tutoria.estado != 'solicitada':
+                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Solo se puede programar una tutoría que está en estado 'solicitada'.")
+
+            # Si es virtual, DEBE tener un enlace
+            if tutoria.modalidad == 'Virtual' and not enlace_reunion:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Las tutorías virtuales requieren el enlace de reunión.")
+            
+            # Guardamos el enlace si aplica
+            tutoria.enlace_reunion = enlace_reunion
+            tutoria.estado = 'programada'
+            
+        # --- Lógica de FINALIZACIÓN (programada -> realizada / no_asistio) ---
+        elif nuevo_estado in ['realizada', 'no_asistio']:
+            if tutoria.estado != 'programada':
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Solo se puede finalizar una tutoría que está en estado 'programada'.")
+            
+            tutoria.estado = nuevo_estado
+            
+        # --- Lógica de RECHAZO (cualquier estado -> cancelada) ---
+        elif nuevo_estado == 'cancelada':
+            tutoria.estado = 'cancelada'
+            
+        else:
+            tutoria.estado = nuevo_estado
+            
         db.commit()
         db.refresh(tutoria)
         return tutoria
+    
 
 # Instancia del servicio para usar en los endpoints
 tutoria_service = TutoriaService()

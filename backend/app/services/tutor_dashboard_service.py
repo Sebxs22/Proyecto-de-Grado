@@ -3,6 +3,8 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Dict, Any, Optional
+# ✅ AGREGADO: Importar el servicio de evaluación
+from app.services.evaluacion_service import evaluacion_service 
 
 def get_tutor_id_by_user_email(db: Session, email: str) -> Optional[int]:
     """Obtiene el ID del perfil del tutor a partir del correo del usuario."""
@@ -18,8 +20,8 @@ def get_tutor_id_by_user_email(db: Session, email: str) -> Optional[int]:
 
 def get_tutor_dashboard_data(db: Session, tutor_id: int) -> Dict[str, Any]:
     """
-    Obtiene los datos para el dashboard del tutor, incluyendo sus cursos,
-    estudiantes, notas y las tutorías que tiene pendientes de aceptar.
+    Obtiene los datos para el dashboard del tutor, incluyendo cursos,
+    tutorías pendientes Y la calificación promedio.
     """
     # Consulta 1: Datos detallados de cursos y estudiantes asignados
     query_cursos = text("""
@@ -43,7 +45,7 @@ def get_tutor_dashboard_data(db: Session, tutor_id: int) -> Dict[str, Any]:
     """)
     cursos_result = db.execute(query_cursos, {"tutor_id": tutor_id}).mappings().all()
 
-    # Consulta 2: Tutorías solicitadas que el tutor debe gestionar (se mantiene igual)
+    # Consulta 2: Tutorías solicitadas
     query_tutorias = text("""
         SELECT
             t.id AS tutoria_id,
@@ -62,7 +64,12 @@ def get_tutor_dashboard_data(db: Session, tutor_id: int) -> Dict[str, Any]:
     """)
     tutorias_result = db.execute(query_tutorias, {"tutor_id": tutor_id}).mappings().all()
 
+    # ✅ NUEVO: Obtener la calificación promedio
+    # Se asume que evaluacion_service.py fue creado con get_tutor_average_rating
+    average_rating = evaluacion_service.get_tutor_average_rating(db, tutor_id)
+
     return {
         "cursos": [dict(row) for row in cursos_result],
-        "tutorias_pendientes": [dict(row) for row in tutorias_result]
+        "tutorias_pendientes": [dict(row) for row in tutorias_result],
+        "average_rating": average_rating # ✅ ENVIAR CALIFICACIÓN
     }

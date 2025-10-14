@@ -34,24 +34,31 @@ class TutoriaCreate(BaseModel):
         }
 
 # Schema para la respuesta, con más detalles
-class Tutoria(TutoriaBase):
+# Schema para la respuesta, con más detalles
+class Tutoria(BaseModel):
     id: int
-    matricula_id: Optional[int] = None  # Puede ser nulo si la matrícula se borra
+    matricula_id: Optional[int] = None
     tutor_id: int
+    fecha: datetime
+    duracion_min: int
+    tema: Optional[str] = None
+    modalidad: str
+    estado: str
+    observaciones_tutor: Optional[str] = None
+    enlace_reunion: Optional[str] = None # ✅ AGREGADO: Enlace de reunión
    
-    # ✅ Se mantiene
     tutor: Tutor
-   
-    # ✅ AGREGADO: Anidamos el objeto Matricula
     matricula: Optional[Matricula] = None
     
     class Config:
         from_attributes = True
-        # ✅ Mismo encoder para las respuestas
         json_encoders = {
             datetime: lambda v: v.isoformat() if v else None
         }
 
-# --- NUEVO SCHEMA PARA ACTUALIZAR ESTADO ---
+# --- NUEVO SCHEMA PARA ACTUALIZAR ESTADO (USADO POR EL TUTOR) ---
 class TutoriaUpdate(BaseModel):
     estado: str
+    enlace_reunion: Optional[str] = None # ✅ AGREGADO: Enlace para aceptar
+    # Campo opcional para que el tutor marque la asistencia/finalización
+    marcar_como_finalizada: Optional[bool] = False 

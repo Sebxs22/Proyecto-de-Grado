@@ -1,8 +1,8 @@
 // frontend/src/pages/DashboardTutor.tsx
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { getTutorDashboard, TutorDashboard } from '../services/tutorDashboardService';
-// Ya no necesitamos actualizarEstadoTutoria aquí, se mueve a TutoriasTutor.tsx
+// Asegúrate de que TutorDashboard ahora tiene average_rating
+import { getTutorDashboard, TutorDashboard } from '../services/tutorDashboardService'; 
 
 // ✅ Nueva función para parsear la nota de forma segura
 const safeParseFloat = (value: number | null | undefined): number => {
@@ -41,13 +41,12 @@ const DashboardTutor: React.FC = () => {
     fetchDashboardData();
   }, [fetchDashboardData]);
 
-  // ✅ ELIMINADA: La función handleUpdateTutoria ya no es necesaria aquí.
-  // La gestión de tutorías ahora se hace en TutoriasTutor.tsx
 
   if (loading) return <div className="text-center p-12">Cargando dashboard del tutor...</div>;
   if (error || !dashboardData) return <div className="text-center text-red-500 p-12">{error || 'No se encontraron datos.'}</div>;
 
-  const { nombre, cursos, tutorias_pendientes } = dashboardData;
+  // ✅ CORREGIDO: Desestructuramos average_rating
+  const { nombre, cursos, tutorias_pendientes, average_rating } = dashboardData;
 
   // Agrupamos los estudiantes por periodo y asignatura
   const cursosAgrupados = cursos.reduce((acc, curso) => {
@@ -63,7 +62,7 @@ const DashboardTutor: React.FC = () => {
     return acc;
   }, {} as Record<string, { periodo: string; asignatura: string; estudiantes: typeof cursos }>);
 
-  // ✅ CORREGIDO: Lógica para calcular estadísticas, usando safeParseFloat
+  // Lógica para calcular estadísticas
   const calcularEstadisticas = (estudiantes: typeof cursos) => {
     // Solo contamos a los estudiantes que tienen una nota final registrada
     const estudiantesConNotaFinal = estudiantes.filter(e => e.final !== null);
@@ -92,23 +91,35 @@ const DashboardTutor: React.FC = () => {
     <div className="space-y-8">
       <h1 className="text-3xl font-bold text-gray-800">Bienvenido, Tutor {nombre}</h1>
 
-      {/* ✅ MODIFICACIÓN: Mostrar resumen de tutorías pendientes en el Dashboard */}
-      <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-yellow-500">
-          <h2 className="text-2xl font-bold text-gray-800 mb-2">Resumen de Tutorías</h2>
-          {tutorias_pendientes.length > 0 ? (
-              <p className="text-yellow-600 font-semibold text-lg">
-                  Tienes <span className="text-3xl font-extrabold">{tutorias_pendientes.length}</span> solicitudes pendientes de aprobación.
-                  <button 
-                      onClick={() => window.location.href = '/tutorias/tutor'}
-                      className="ml-4 text-blue-600 hover:text-blue-800 font-medium underline"
-                  >
-                      Ir a Gestión
-                  </button>
-              </p>
-          ) : (
-              <p className="text-gray-600">No tienes tutorías pendientes de aprobación.</p>
-          )}
+      {/* ✅ SECCIÓN CALIFICACIÓN PROMEDIO Y RESUMEN DE TUTORÍAS */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {/* Card de Rating */}
+        <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-green-500">
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">Tu Calificación Promedio</h2>
+            <p className="text-green-600 font-extrabold text-4xl">
+                {Number(average_rating).toFixed(2)} / 5.0 {/* ✅ MOSTRAR CALIFICACIÓN */}
+            </p>
+        </div>
+        
+        {/* Card de Pendientes */}
+        <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-yellow-500">
+            <h2 className="text-2xl font-bold text-gray-800 mb-2">Resumen de Tutorías</h2>
+            {tutorias_pendientes.length > 0 ? (
+                <p className="text-yellow-600 font-semibold text-lg">
+                    Tienes <span className="text-3xl font-extrabold">{tutorias_pendientes.length}</span> solicitudes pendientes.
+                    <button 
+                        onClick={() => window.location.href = '/tutorias/tutor'}
+                        className="ml-4 text-blue-600 hover:text-blue-800 font-medium underline"
+                    >
+                        Ir a Gestión
+                    </button>
+                </p>
+            ) : (
+                <p className="text-gray-600">No tienes tutorías pendientes de aprobación.</p>
+            )}
+        </div>
       </div>
+
 
       {/* Sección de Cursos y Estudiantes (Se mantiene) */}
       <div className="bg-white p-6 rounded-lg shadow-md">
