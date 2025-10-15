@@ -18,7 +18,7 @@ class EvaluacionService:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tutoría no encontrada.")
         
         # Regla de negocio: Solo se puede evaluar una tutoría si ha sido 'realizada' o 'no_asistio'
-        if tutoria.estado not in ['realizada', 'no_asistio']:
+        if tutoria.estado != 'realizada':
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, 
                 detail=f"La tutoría debe estar en estado 'realizada' o 'no_asistio' para ser evaluada (Estado actual: {tutoria.estado})."

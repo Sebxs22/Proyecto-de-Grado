@@ -151,7 +151,7 @@ const MisTutorias: React.FC = () => {
                                             )}
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            {(tutoria.estado === 'realizada' || tutoria.estado === 'no_asistio') ? (
+                                            {tutoria.estado === 'realizada' ? (
                                                 <button
                                                     onClick={() => handleEvaluarClick(tutoria.id, tutoria.matricula.asignatura.nombre)}
                                                     className={`px-3 py-1 text-sm rounded transition-colors font-medium ${
@@ -163,6 +163,8 @@ const MisTutorias: React.FC = () => {
                                                 >
                                                     {yaEvaluada ? 'Ya Evaluada' : 'Evaluar'}
                                                 </button>
+                                            ) : tutoria.estado === 'no_asistio' ? (
+                                                <span className="text-xs text-gray-500">No asistida</span>
                                             ) : (
                                                 <span className="text-xs text-gray-500">Pendiente Tutor</span>
                                             )}

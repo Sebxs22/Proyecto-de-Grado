@@ -20,6 +20,10 @@ const DashboardEstudiante: React.FC = () => {
   // ✨ 2. AÑADIMOS UN NUEVO ESTADO PARA LAS TUTORÍAS PROGRAMADAS
   const [tutoriasProgramadas, setTutoriasProgramadas] = useState<TutoriaEstudiante[]>([]);
 
+  // --- NUEVO: Estados para la paginación ---
+  const [currentPage, setCurrentPage] = useState(1);
+  // LÍNEA CORREGIDA
+const [itemsPerPage] = useState(5); // Muestra 5 materias por página // Muestra 5 materias por página
 
   // ✨ 3. ACTUALIZAMOS LA FUNCIÓN DE CARGA DE DATOS
   const fetchDashboardData = useCallback(async () => {
@@ -81,6 +85,12 @@ const DashboardEstudiante: React.FC = () => {
   }
   
   const { kpis, nombre, historial_academico } = dashboardData;
+
+  // --- NUEVO: Lógica de Paginación ---
+  const indexOfLastItem = currentPage * itemsPerPage;
+  const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+  const currentItems = historial_academico.slice(indexOfFirstItem, indexOfLastItem);
+  const totalPages = Math.ceil(historial_academico.length / itemsPerPage);
   
   const riskColorClasses = {
     green: 'bg-green-200 text-green-800',
@@ -114,8 +124,7 @@ const DashboardEstudiante: React.FC = () => {
         )}
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {/* ... (el resto del código de los KPIs no cambia) ... */}
-           <div className="bg-white p-6 rounded-lg shadow-md">
+          <div className="bg-white p-6 rounded-lg shadow-md">
             <h3 className="text-lg font-semibold text-gray-600">Promedio General</h3>
             <p className="text-4xl font-bold text-blue-600 mt-2">{Number(kpis.promedio_general).toFixed(2)}</p>
           </div>
@@ -126,8 +135,7 @@ const DashboardEstudiante: React.FC = () => {
         </div>
 
         <div className="bg-white p-6 rounded-lg shadow-md">
-          {/* ... (el resto del código de la tabla no cambia) ... */}
-           <h2 className="text-2xl font-bold text-gray-800 mb-4">Rendimiento Académico por Materia</h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-4">Rendimiento Académico por Materia</h2>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -143,7 +151,8 @@ const DashboardEstudiante: React.FC = () => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {historial_academico.map((materia, index) => (
+                {/* --- NUEVO: Mapeamos sobre 'currentItems' en lugar de 'historial_academico' --- */}
+                {currentItems.map((materia, index) => (
                   <tr key={index}>
                     <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">{materia.asignatura}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-gray-700">{materia.parcial1 ? Number(materia.parcial1).toFixed(2) : 'N/A'}</td>
@@ -170,6 +179,31 @@ const DashboardEstudiante: React.FC = () => {
               </tbody>
             </table>
           </div>
+          
+          {/* --- NUEVO: Controles de Paginación --- */}
+          {totalPages > 1 && (
+            <div className="flex justify-between items-center mt-6 pt-4 border-t border-gray-200">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={currentPage === 1}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Anterior
+              </button>
+              <span className="text-sm text-gray-700">
+                Página {currentPage} de {totalPages}
+              </span>
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={currentPage === totalPages}
+                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Siguiente
+              </button>
+            </div>
+          )}
+          {/* --- FIN de Controles --- */}
+
         </div>
       </div>
 
