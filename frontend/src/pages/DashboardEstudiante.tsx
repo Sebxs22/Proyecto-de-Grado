@@ -4,34 +4,51 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { getStudentDashboard, StudentDashboard } from '../services/dashboardService';
 import AgendarTutoriaModal from '../components/AgendarTutoriaModal';
 
+// ✨ 1. IMPORTAMOS EL SERVICIO Y LA INTERFAZ DE TUTORÍAS
+import { getMisTutorias, TutoriaEstudiante } from '../services/tutoriaService';
+import { Link } from 'react-router-dom'; // Para el enlace
+
 const DashboardEstudiante: React.FC = () => {
   const [dashboardData, setDashboardData] = useState<StudentDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedMatriculaId, setSelectedMatriculaId] = useState<number | null>(null); // ✅ Cambiado a ID simple
-  const [selectedTutorId, setSelectedTutorId] = useState<number | null>(null); // ✅ Cambiado a ID simple
+  const [selectedMatriculaId, setSelectedMatriculaId] = useState<number | null>(null);
+  const [selectedTutorId, setSelectedTutorId] = useState<number | null>(null);
   const [selectedTutorNombre, setSelectedTutorNombre] = useState<string | null>(null);
 
-  // Función de carga de datos encapsulada
+  // ✨ 2. AÑADIMOS UN NUEVO ESTADO PARA LAS TUTORÍAS PROGRAMADAS
+  const [tutoriasProgramadas, setTutoriasProgramadas] = useState<TutoriaEstudiante[]>([]);
+
+
+  // ✨ 3. ACTUALIZAMOS LA FUNCIÓN DE CARGA DE DATOS
   const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
-      const data = await getStudentDashboard();
-      console.log("📊 Dashboard data cargada:", data);
-      setDashboardData(data);
+      // Obtenemos los datos del dashboard y las tutorías en paralelo
+      const [dashboard, tutorias] = await Promise.all([
+        getStudentDashboard(),
+        getMisTutorias() 
+      ]);
+      
+      console.log("📊 Dashboard data cargada:", dashboard);
+      setDashboardData(dashboard);
+      
+      // Filtramos solo las tutorías que están 'programadas'
+      const programadas = tutorias.filter(t => t.estado === 'programada');
+      setTutoriasProgramadas(programadas);
+      console.log("🔔 Tutorías programadas encontradas:", programadas.length);
+
       setError(null);
     } catch (err: any) {
-      // Capturamos el error de forma segura
       const errorMessage = err.response?.data?.detail || 'No se pudo cargar la información. Asegúrate de haber iniciado sesión y refresca la página.';
       setError(errorMessage);
       console.error("❌ Error al cargar dashboard estudiante:", err);
     } finally {
       setLoading(false);
     }
-  }, []); // Dependencias vacías, solo se define una vez
+  }, []);
 
-  // Ejecución inicial de la carga de datos
   useEffect(() => {
     fetchDashboardData();
   }, [fetchDashboardData]);
@@ -50,17 +67,15 @@ const DashboardEstudiante: React.FC = () => {
     setSelectedTutorNombre(null);
   };
   
-  // Función para recargar los datos después de agendar una tutoría con éxito
   const handleSuccessAgendar = () => {
-    handleModalClose(); // Cierra el modal
-    fetchDashboardData(); // Vuelve a cargar los datos
+    handleModalClose();
+    fetchDashboardData();
   }
 
   if (loading) {
     return <div className="text-center p-12">Cargando dashboard...</div>;
   }
 
-  // Muestra error si falla la carga o si no hay datos
   if (error || !dashboardData) {
     return <div className="text-center text-red-500 p-12">{error || 'No se encontraron datos.'}</div>;
   }
@@ -77,9 +92,30 @@ const DashboardEstudiante: React.FC = () => {
     <>
       <div className="space-y-8">
         <h1 className="text-3xl font-bold text-gray-800 mb-6">Bienvenido, {nombre}</h1>
+
+        {/* ✨ 4. AÑADIMOS LA TARJETA DE NOTIFICACIÓN DE TUTORÍAS */}
+        {tutoriasProgramadas.length > 0 && (
+          <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-r-lg shadow-md">
+            <div className="flex items-center">
+              <div className="text-2xl mr-4">🗓️</div>
+              <div>
+                <p className="font-bold text-blue-800">
+                  ¡Tienes {tutoriasProgramadas.length} tutoría(s) programada(s)!
+                </p>
+                <p className="text-sm text-blue-700">
+                  La más próxima es sobre "{tutoriasProgramadas[0].tema}" el {new Date(tutoriasProgramadas[0].fecha).toLocaleDateString()}.
+                  <Link to="/tutorias/estudiante" className="ml-2 font-semibold underline hover:text-blue-900">
+                    Ver detalles
+                  </Link>
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-lg shadow-md">
+          {/* ... (el resto del código de los KPIs no cambia) ... */}
+           <div className="bg-white p-6 rounded-lg shadow-md">
             <h3 className="text-lg font-semibold text-gray-600">Promedio General</h3>
             <p className="text-4xl font-bold text-blue-600 mt-2">{Number(kpis.promedio_general).toFixed(2)}</p>
           </div>
@@ -90,7 +126,8 @@ const DashboardEstudiante: React.FC = () => {
         </div>
 
         <div className="bg-white p-6 rounded-lg shadow-md">
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Rendimiento Académico por Materia</h2>
+          {/* ... (el resto del código de la tabla no cambia) ... */}
+           <h2 className="text-2xl font-bold text-gray-800 mb-4">Rendimiento Académico por Materia</h2>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200">
               <thead className="bg-gray-50">
@@ -123,7 +160,7 @@ const DashboardEstudiante: React.FC = () => {
                       <button 
                         onClick={() => handleAgendarClick(materia.matricula_id, materia.tutor_id, materia.tutor_nombre)} 
                         className="text-blue-600 hover:text-blue-900 font-semibold disabled:text-gray-400"
-                        disabled={!materia.tutor_id} // Deshabilitar si tutor_id es null o 0
+                        disabled={!materia.tutor_id}
                       >
                         {materia.tutor_id ? 'Agendar Tutoría' : 'Sin Tutor'}
                       </button>
@@ -139,8 +176,8 @@ const DashboardEstudiante: React.FC = () => {
       <AgendarTutoriaModal 
         isOpen={isModalOpen}
         onClose={handleModalClose}
-        matriculaId={selectedMatriculaId} // ✅ Usamos el ID de matrícula
-        tutorId={selectedTutorId} // ✅ Usamos el ID del tutor
+        matriculaId={selectedMatriculaId}
+        tutorId={selectedTutorId}
         tutorNombre={selectedTutorNombre}
         onSuccess={handleSuccessAgendar} 
       />

@@ -70,5 +70,6 @@ def get_tutor_dashboard(db: Session = Depends(get_db), current_user: UserModel =
     return {
         "nombre": current_user.nombre,
         "cursos": dashboard_data["cursos"],
-        "tutorias_pendientes": dashboard_data["tutorias_pendientes"]
+        "tutorias_pendientes": dashboard_data["tutorias_pendientes"],
+        "average_rating": dashboard_data["average_rating"]
     }

@@ -9,13 +9,18 @@ class Tutoria(Base):
     __table_args__ = {'schema': 'tutorias_unach'}
 
     id = Column(Integer, primary_key=True, index=True)
-    fecha = Column(DateTime(timezone=True), nullable=False)
+    fecha = Column(DateTime, nullable=False) # ✨ CORRECCIÓN: Quitamos timezone=True para consistencia
     duracion_min = Column(Integer, nullable=False)
     tema = Column(Text)
     modalidad = Column(String(20))
     estado = Column(String(20), nullable=False)
     observaciones_tutor = Column(Text)
-    fecha_registro = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # --- ✨ INICIO DE LA MODIFICACIÓN ---
+    enlace_reunion = Column(String(255), nullable=True) # <-- AÑADE ESTA LÍNEA
+    # --- ✨ FIN DE LA MODIFICACIÓN ---
+
+    fecha_registro = Column(DateTime, server_default=func.now()) # ✨ CORRECIÓN: Quitamos timezone=True
 
     # --- Conexiones Clave ---
     matricula_id = Column(Integer, ForeignKey("tutorias_unach.matriculas.id"), nullable=True)
@@ -26,5 +31,4 @@ class Tutoria(Base):
     tutor = relationship("Tutor", back_populates="tutorias_impartidas")
 
     # --- Relación "hijo" ---
-    # Una tutoría solo puede tener una evaluación
     evaluacion = relationship("Evaluacion", back_populates="tutoria", uselist=False, cascade="all, delete-orphan")

@@ -95,16 +95,18 @@ CREATE TABLE IF NOT EXISTS tutorias (
     matricula_id INTEGER REFERENCES matriculas(id) ON DELETE SET NULL,
     tutor_id INTEGER NOT NULL REFERENCES tutores(id) ON DELETE CASCADE,
     
-    -- ✅ CORRECCIÓN CRÍTICA: TIMESTAMP sin TZ (era TIMESTAMPTZ)
     fecha TIMESTAMP NOT NULL,
     
     duracion_min INTEGER NOT NULL CHECK (duracion_min > 0),
     tema TEXT,
-    modalidad VARCHAR(20) CHECK (modalidad IN ('Presencial', 'Virtual', 'Híbrida')),
+    modalidad VARCHAR(20) CHECK (modalidad IN ('Presencial', 'Virtual')), -- Simplificado
     estado VARCHAR(20) NOT NULL CHECK (estado IN ('realizada', 'cancelada', 'no_asistio', 'programada', 'solicitada')),
     observaciones_tutor TEXT,
     
-    -- ✅ CORRECCIÓN: TIMESTAMP sin TZ (era TIMESTAMPTZ)
+    -- --- ✨ INICIO DE LA MODIFICACIÓN ---
+    enlace_reunion VARCHAR(255), -- <-- AÑADE ESTA LÍNEA
+    -- --- ✨ FIN DE LA MODIFICACIÓN ---
+    
     fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

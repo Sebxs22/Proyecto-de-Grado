@@ -20,3 +20,42 @@ export const crearTutoria = async (payload: TutoriaPayload) => {
     throw error;
   }
 };
+
+
+// --- INICIO DE LA MODIFICACIÓN ---
+
+// Definimos la interfaz completa de lo que esperamos recibir
+export interface TutoriaEstudiante {
+    id: number;
+    fecha: string;
+    tema: string | null;
+    modalidad: string;
+    estado: 'solicitada' | 'programada' | 'cancelada' | 'realizada' | 'no_asistio';
+    enlace_reunion: string | null;
+    evaluacion: any;
+    tutor: {
+        usuario: {
+            nombre: string;
+        };
+    };
+    matricula: {
+        asignatura: {
+            nombre: string;
+        };
+    };
+}
+
+/**
+ * Obtiene la lista de tutorías para el estudiante autenticado.
+ */
+export const getMisTutorias = async (): Promise<TutoriaEstudiante[]> => {
+    try {
+        const response = await axiosClient.get('/tutorias/');
+        return response.data;
+    } catch (error) {
+        console.error("Error al obtener las tutorías del estudiante:", error);
+        throw error;
+    }
+};
+
+// --- FIN DE LA MODIFICACIÓN ---

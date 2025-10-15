@@ -22,6 +22,57 @@ def clean_and_read_csv(path):
     df.columns = df.columns.str.strip().str.replace('ï»¿', '')
     return df
 
+# ✨ --- INICIO DE LA NUEVA LÓGICA DE CORREOS --- ✨
+def generar_correos_docentes(df_docentes):
+    """
+    Genera correos únicos para un DataFrame de docentes, intentando varias estrategias.
+    """
+    correos_generados = {}
+    emails_existentes = set()
+
+    # Se procesan los nombres para asegurar que son cadenas de texto
+    nombres_validos = df_docentes['nombre'].dropna().unique()
+
+    for nombre_completo in nombres_validos:
+        partes = nombre_completo.lower().split()
+        if len(partes) < 2:
+            continue
+
+        # --- Estrategia 1: [primera letra del último nombre][primer apellido] ---
+        # e.g., "ALLAUCA PEÑAFIEL LUIS GONZALO" -> gallauca@unach.edu.ec
+        correo_p1 = f"{partes[-1][0]}{partes[0]}@unach.edu.ec"
+        if correo_p1 not in emails_existentes:
+            correos_generados[nombre_completo] = correo_p1
+            emails_existentes.add(correo_p1)
+            continue
+
+        # --- Estrategia 2: [primer nombre].[primer apellido] (si hay duplicado) ---
+        # e.g., "ALLAUCA PEÑAFIEL LUIS GONZALO" -> luis.allauca@unach.edu.ec
+        # Se asume que el primer nombre es la tercera palabra.
+        if len(partes) > 2:
+            correo_p2 = f"{partes[2]}.{partes[0]}@unach.edu.ec"
+            if correo_p2 not in emails_existentes:
+                correos_generados[nombre_completo] = correo_p2
+                emails_existentes.add(correo_p2)
+                continue
+
+        # --- Estrategia 3: Agregar un número si todo lo demás falla ---
+        base_correo = f"{partes[-1][0]}{partes[0]}"
+        i = 2
+        while True:
+            correo_p3 = f"{base_correo}{i}@unach.edu.ec"
+            if correo_p3 not in emails_existentes:
+                correos_generados[nombre_completo] = correo_p3
+                emails_existentes.add(correo_p3)
+                break
+            i += 1
+            
+    # Mapear los correos de vuelta al DataFrame original
+    df_docentes['correo'] = df_docentes['nombre'].map(correos_generados)
+    return df_docentes
+# ✨ --- FIN DE LA NUEVA LÓGICA DE CORREOS --- ✨
+
+
 def main():
     """Función principal que orquesta el proceso ETL."""
     logging.info("--- INICIANDO PROCESO ETL FINAL Y DEFINITIVO ---")
@@ -61,10 +112,14 @@ def main():
         asignaturas.to_sql('asignaturas', engine, schema='tutorias_unach', if_exists='append', index=False)
         
         docentes = df_calificaciones[['Docente']].dropna().drop_duplicates().rename(columns={'Docente': 'nombre'})
-        docentes['correo'] = docentes['nombre'].str.lower().str.replace(r'\s+', '.', regex=True) + '@unach.edu.ec'
+        
+        # ✨ --- APLICAMOS LA NUEVA FUNCIÓN DE CORREOS --- ✨
+        docentes = generar_correos_docentes(docentes)
+        
         docentes['rol'] = 'tutor'
         docentes['hashed_password'] = password_hash
-        docentes[['nombre', 'correo', 'hashed_password', 'rol']].to_sql('usuarios', engine, schema='tutorias_unach', if_exists='append', index=False)
+        # Asegurarse de no insertar filas donde el correo no se pudo generar
+        docentes.dropna(subset=['correo']).to_sql('usuarios', engine, schema='tutorias_unach', if_exists='append', index=False)
         
         estudiantes = df_calificaciones[['IdEstudiante']].dropna().drop_duplicates()
         estudiantes['nombre'] = 'Estudiante ' + estudiantes['IdEstudiante'].astype(str)
