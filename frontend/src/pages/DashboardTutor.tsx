@@ -1,8 +1,8 @@
 // frontend/src/pages/DashboardTutor.tsx
 
 import React, { useEffect, useState, useCallback } from 'react';
-// Asegúrate de que TutorDashboard ahora tiene average_rating
 import { getTutorDashboard, TutorDashboard } from '../services/tutorDashboardService'; 
+// Ya no necesitamos actualizarEstadoTutoria aquí, se mueve a TutoriasTutor.tsx
 
 // ✅ Nueva función para parsear la nota de forma segura
 const safeParseFloat = (value: number | null | undefined): number => {
@@ -45,8 +45,8 @@ const DashboardTutor: React.FC = () => {
   if (loading) return <div className="text-center p-12">Cargando dashboard del tutor...</div>;
   if (error || !dashboardData) return <div className="text-center text-red-500 p-12">{error || 'No se encontraron datos.'}</div>;
 
-  // ✅ CORREGIDO: Desestructuramos average_rating
-  const { nombre, cursos, tutorias_pendientes, average_rating } = dashboardData;
+  // ✅ CORREGIDO: Desestructuramos average_rating. Le damos un valor por defecto seguro (0.0)
+  const { nombre, cursos, tutorias_pendientes, average_rating = 0.0 } = dashboardData as TutorDashboard & { average_rating: number };
 
   // Agrupamos los estudiantes por periodo y asignatura
   const cursosAgrupados = cursos.reduce((acc, curso) => {
@@ -97,7 +97,8 @@ const DashboardTutor: React.FC = () => {
         <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-green-500">
             <h2 className="text-2xl font-bold text-gray-800 mb-2">Tu Calificación Promedio</h2>
             <p className="text-green-600 font-extrabold text-4xl">
-                {Number(average_rating).toFixed(2)} / 5.0 {/* ✅ MOSTRAR CALIFICACIÓN */}
+                {/* ✅ Muestra el promedio: si es 0.0, se ve 0.00 / 5.0 */}
+                {Number(average_rating).toFixed(2)} / 5.0 
             </p>
         </div>
         

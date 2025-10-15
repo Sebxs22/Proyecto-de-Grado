@@ -83,14 +83,15 @@ class TutoriaService:
     
     def get_tutorias_by_tutor(self, db: Session, tutor_id: int):
         """
-        Obtiene todas las tutorías de un tutor.
+        Obtiene todas las tutorías de un tutor, incluyendo la evaluación si existe.
         """
         tutorias = db.query(Tutoria).filter(
             Tutoria.tutor_id == tutor_id
         ).options(
             joinedload(Tutoria.tutor).joinedload(Tutor.usuario),
             joinedload(Tutoria.matricula).joinedload(Matricula.estudiante).joinedload(Estudiante.usuario),
-            joinedload(Tutoria.matricula).joinedload(Matricula.asignatura)
+            joinedload(Tutoria.matricula).joinedload(Matricula.asignatura),
+            joinedload(Tutoria.evaluacion) # ✅ AGREGADO: Incluir la evaluación
         ).all()
         
         return tutorias

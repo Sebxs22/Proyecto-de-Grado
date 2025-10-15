@@ -46,7 +46,7 @@ class EvaluacionService:
             
     def get_tutor_average_rating(self, db: Session, tutor_id: int) -> float:
         """
-        Calcula el promedio de estrellas de un tutor.
+        Calcula el promedio de estrellas de un tutor, garantizando un float.
         """
         # Une evaluaciones con tutorías para filtrar por tutor_id
         avg_rating = db.query(func.avg(Evaluacion.estrellas)).join(
@@ -55,6 +55,8 @@ class EvaluacionService:
             Tutoria.tutor_id == tutor_id
         ).scalar()
         
-        return round(float(avg_rating) if avg_rating else 0.0, 2)
+        # ✅ CORRECCIÓN CLAVE: Si avg_rating es None, devuelve 0.0, lo que resuelve el N/A en el frontend
+        return round(float(avg_rating) if avg_rating is not None else 0.0, 2) 
+
 
 evaluacion_service = EvaluacionService()

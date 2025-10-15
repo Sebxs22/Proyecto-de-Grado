@@ -223,6 +223,22 @@ interface TablaProps {
     tipoAccion: 'solicitud' | 'finalizar' | 'historial';
 }
 
+const renderEstrellas = (estrellas: number) => {
+    const starColor = 'text-yellow-500';
+    const emptyColor = 'text-gray-300';
+    
+    return (
+        <div className="flex text-lg">
+            {[1, 2, 3, 4, 5].map(i => (
+                <span key={i} className={i <= estrellas ? starColor : emptyColor}>
+                    ★
+                </span>
+            ))}
+        </div>
+    );
+};
+
+
 const TablaTutorias: React.FC<TablaProps> = ({ tutorias, handleAceptar, handleActualizarEstado, tipoAccion }) => {
     return (
         <div className="overflow-x-auto">
@@ -234,6 +250,10 @@ const TablaTutorias: React.FC<TablaProps> = ({ tutorias, handleAceptar, handleAc
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha y Hora</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Modalidad</th>
                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                        {/* ✅ NUEVA COLUMNA DE EVALUACIÓN */}
+                        {(tipoAccion === 'historial' || tipoAccion === 'finalizar') && 
+                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Evaluación</th>
+                        }
                         {tipoAccion !== 'historial' && <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>}
                     </tr>
                 </thead>
@@ -265,6 +285,19 @@ const TablaTutorias: React.FC<TablaProps> = ({ tutorias, handleAceptar, handleAc
                                     </a>
                                 )}
                             </td>
+                            {/* ✅ CELDA DE EVALUACIÓN */}
+                            {(tipoAccion === 'historial' || tipoAccion === 'finalizar') && (
+                                <td className="px-6 py-4 whitespace-nowrap">
+                                    {tutoria.evaluacion ? (
+                                        <div title={tutoria.evaluacion.comentario_estudiante || ''}>
+                                            {renderEstrellas(tutoria.evaluacion.estrellas)}
+                                        </div>
+                                    ) : (
+                                        <span className="text-xs text-gray-500">Pendiente Eval.</span>
+                                    )}
+                                </td>
+                            )}
+                            {/* CELDA DE ACCIONES */}
                             {tipoAccion === 'solicitud' && (
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="flex gap-2">

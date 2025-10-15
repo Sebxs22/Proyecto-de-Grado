@@ -2,6 +2,7 @@
 from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime
+from .evaluacion import Evaluacion 
 
 # Importamos los schemas necesarios
 from .tutor import Tutor
@@ -49,6 +50,7 @@ class Tutoria(BaseModel):
    
     tutor: Tutor
     matricula: Optional[Matricula] = None
+    evaluacion: Optional[Evaluacion] = None
     
     class Config:
         from_attributes = True
