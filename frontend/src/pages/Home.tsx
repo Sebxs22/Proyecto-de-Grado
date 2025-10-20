@@ -22,6 +22,8 @@ const Home: React.FC = () => {
         navigate('/dashboard/tutor');
     } else if (user.rol === 'estudiante') {
         navigate('/dashboard/estudiante');
+    } else if (user.rol === 'coordinador') { // ✅ AÑADIDO
+        navigate('/dashboard/coordinador'); // ✅ AÑADIDO
     } else {
         // Redirección por defecto si el rol no es manejado
         navigate('/login');

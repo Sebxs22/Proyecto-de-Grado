@@ -4,6 +4,7 @@ import pandas as pd
 import sqlalchemy
 import logging
 import os
+
 from app.core.security import get_password_hash
 
 # --- 1. CONFIGURACIÓN ---
@@ -127,6 +128,20 @@ def main():
         estudiantes['rol'] = 'estudiante'
         estudiantes['hashed_password'] = password_hash
         estudiantes[['nombre', 'correo', 'hashed_password', 'rol']].to_sql('usuarios', engine, schema='tutorias_unach', if_exists='append', index=False)
+
+        # ✨ --- INICIO: AÑADIR USUARIO COORDINADOR --- ✨
+        logging.info("Creando usuario Coordinador de ejemplo...")
+        coordinador = pd.DataFrame([{
+            'nombre': 'Coordinador General',
+            'correo': 'coordinador@unach.edu.ec',
+            'hashed_password': password_hash,
+            'rol': 'coordinador'
+        }])
+        coordinador.to_sql('usuarios', engine, schema='tutorias_unach', if_exists='append', index=False)
+        logging.info("-> Usuario Coordinador creado con éxito.")
+        # ✨ --- FIN: AÑADIR USUARIO COORDINADOR --- ✨
+
+        df_usuarios_db = pd.read_sql("SELECT id, correo FROM tutorias_unach.usuarios", engine)
         
         df_usuarios_db = pd.read_sql("SELECT id, correo FROM tutorias_unach.usuarios", engine)
         df_tutores = pd.merge(docentes, df_usuarios_db, on='correo').rename(columns={'id': 'usuario_id'})

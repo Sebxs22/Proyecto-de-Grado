@@ -47,6 +47,15 @@ const Sidebar: React.FC = () => {
                     Gestión de Tutorías
                 </li>
             )}
+            {/* ✅ AÑADIDO: Enlace al CMI para coordinadores */}
+            {user?.rol === 'coordinador' && (
+                <li
+                    className="mb-2 p-2 rounded hover:bg-gray-700 cursor-pointer transition-colors"
+                    onClick={() => navigate('/dashboard/coordinador')}
+                >
+                    Cuadro de Mando
+                </li>
+            )}
           </ul>
         </nav>
       </div>

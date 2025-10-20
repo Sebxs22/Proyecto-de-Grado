@@ -8,6 +8,7 @@ import Home from './pages/Home';
 import { useAuth } from './context/AuthContext'; // ✅ AGREGADO
 import MisTutorias from './pages/MisTutorias'; // ✅ AGREGADO
 import TutoriasTutor from './pages/TutoriasTutor'; // ✅ AGREGADO
+import DashboardCoordinador from './pages/DashboardCoordinador'; // ✅ AÑADIDO
 
 // Guardia para proteger rutas
 const PrivateRoutes = () => {
@@ -33,6 +34,7 @@ function App() {
           <Route path="/" element={<Home />} />
           <Route path="/dashboard/estudiante" element={<DashboardEstudiante />} />
           <Route path="/dashboard/tutor" element={<DashboardTutor />} />
+          <Route path="/dashboard/coordinador" element={<DashboardCoordinador />} /> {/* ✅ AÑADIDO */}
           <Route path="/tutorias/estudiante" element={<MisTutorias />} /> 
           <Route path="/tutorias/tutor" element={<TutoriasTutor />} /> 
         </Route>

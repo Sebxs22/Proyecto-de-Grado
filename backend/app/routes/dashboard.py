@@ -8,6 +8,7 @@ from app.db.database import get_db
 from app.dependencies import get_current_user
 from app.services import dashboard_service
 from app.services import tutor_dashboard_service
+from app.services.cmi_service import cmi_service
 # ✅ CORREGIDO: Importar el servicio centralizado de perfiles
 from app.services.profile_service import get_student_id_by_user_email, get_tutor_id_by_user_email 
 from app.models.user import Usuario as UserModel
@@ -72,4 +73,25 @@ def get_tutor_dashboard(db: Session = Depends(get_db), current_user: UserModel =
         "cursos": dashboard_data["cursos"],
         "tutorias_pendientes": dashboard_data["tutorias_pendientes"],
         "average_rating": dashboard_data["average_rating"]
+    }
+
+# --- ✅ NUEVO ENDPOINT PARA EL COORDINADOR (CMI) ---
+@router.get("/coordinator", response_model=Dict[str, Any], tags=["Dashboard"])
+def get_coordinator_dashboard(db: Session = Depends(get_db), current_user: UserModel = Depends(get_current_user)):
+    """
+    Retorna los datos para el Cuadro de Mando Integral (CMI) del Coordinador.
+    Requiere un token de autenticación de un usuario con rol 'coordinador'.
+    """
+    if current_user.rol != "coordinador":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Acceso denegado: Se requiere rol de coordinador."
+        )
+    
+    # El CMI no está atado a un coordinador específico, es una vista global.
+    data = cmi_service.get_cmi_data(db)
+    
+    return {
+        "nombre": current_user.nombre,
+        "cmi": data
     }
