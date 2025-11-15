@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware # <--- 1. IMPORTAMOS EL MÓDU
 # Importamos los routers
 from app.routes import users, auth, dashboard, tutorias
 from app.routes import evaluaciones
+from app.routes import reports
 
 app = FastAPI(
     title="Tutorías UNACH API",
@@ -33,6 +34,7 @@ app.include_router(users.router, prefix="/users", tags=["Users"])
 app.include_router(dashboard.router, prefix="/dashboard", tags=["Dashboard"])
 app.include_router(tutorias.router, prefix="/tutorias", tags=["Tutorías"])
 app.include_router(evaluaciones.router, prefix="/evaluaciones", tags=["Evaluaciones"])
+app.include_router(reports.router, prefix="/reports", tags=["Reports"])
 
 @app.get("/")
 def read_root():

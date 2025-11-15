@@ -8,23 +8,30 @@ interface KpiData {
     total_materias: number;
 }
 
+// ✅ INTERFAZ ACTUALIZADA
 interface HistorialAcademico {
     asignatura: string;
     parcial1: number | null;
     parcial2: number | null;
     final: number | null;
     situacion: string | null;
-    riesgo_nivel: 'BAJO' | 'MEDIO' | 'ALTO';
-    riesgo_color: 'green' | 'yellow' | 'red';
+
+    // Se cambiaron a 'string' para aceptar 'N/A' y 'gray'
+    riesgo_nivel: string | null; 
+    riesgo_color: string | null;
+    
+    // ✅ AÑADIDO: La propiedad que faltaba y causaba el error
+    probabilidad_riesgo: number | null; 
+
     matricula_id: number;
     tutor_id: number;
-    tutor_nombre: string; // ✅ AGREGADO
+    tutor_nombre: string;
 }
 
 export interface StudentDashboard {
     nombre: string;
     kpis: KpiData;
-    historial_academico: HistorialAcademico[]; // Cambiado de "historial" a "historial_academico"
+    historial_academico: HistorialAcademico[];
 }
 
 export const getStudentDashboard = async (): Promise<StudentDashboard> => {

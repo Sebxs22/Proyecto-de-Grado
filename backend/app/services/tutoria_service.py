@@ -10,26 +10,40 @@ from app.schemas.tutoria import TutoriaCreate,TutoriaUpdate
 from fastapi import HTTPException
 from typing import Optional # ✅ CORREGIDO: Importar Optional
 from fastapi import status 
+from datetime import datetime, timedelta
 
 class TutoriaService:
     
-    def create_tutoria(self, db: Session, tutoria: TutoriaCreate, estudiante_id: int):
+    def create_tutoria(self, db: Session, tutoria: TutoriaCreate, estudiante_id: int, 
+                       tema_predeterminado: Optional[str] = None,
+                       modalidad_predeterminada: Optional[str] = 'Virtual'):
         """
         Crea una nueva tutoría.
-        ✅ CORREGIDO: Eliminamos la información de zona horaria para evitar
-        la conversión UTC en el servidor (problema de 6 horas de diferencia).
+        Ahora puede ser invocada por el estudiante (con datos completos)
+        o por el sistema (con datos automáticos).
         """
         try:
-            tutoria_data = tutoria.model_dump()
+            # Si es una creación del sistema (automática), llenamos datos por defecto
+            if tema_predeterminado:
+                tutoria_data = {
+                    "matricula_id": tutoria.matricula_id,
+                    "tutor_id": tutoria.tutor_id,
+                    "fecha": datetime.now() + timedelta(days=2), # Programar para 2 días en el futuro
+                    "duracion_min": 60,
+                    "tema": tema_predeterminado,
+                    "modalidad": modalidad_predeterminada,
+                    "estado": "solicitada"
+                }
+            else:
+                # Si es del estudiante, usamos los datos del payload
+                tutoria_data = tutoria.model_dump()
             
-            # --- 🛑 SOLUCIÓN AL PROBLEMA DE LA HORA 🛑 ---
-            # Removemos la información de timezone (tzinfo) para que SQLAlchemy 
-            # almacene la fecha/hora exactamente como viene del frontend (ej. 11:00 AM)
-            # sin ajustes automáticos de UTC.
-            if tutoria_data['fecha'].tzinfo is not None:
+            # --- SOLUCIÓN AL PROBLEMA DE LA HORA ---
+            if 'fecha' in tutoria_data and tutoria_data['fecha'].tzinfo is not None:
                 tutoria_data['fecha'] = tutoria_data['fecha'].replace(tzinfo=None)
             
-            tutoria_data['estado'] = 'solicitada'
+            if 'estado' not in tutoria_data or not tema_predeterminado:
+                 tutoria_data['estado'] = 'solicitada'
             
             # Crear la tutoría
             nueva_tutoria = Tutoria(**tutoria_data)
@@ -37,7 +51,7 @@ class TutoriaService:
             db.commit()
             db.refresh(nueva_tutoria)
             
-            # Recargar con todas las relaciones necesarias
+            # ... (el resto de la función de recarga y retorno sigue igual) ...
             tutoria_completa = db.query(Tutoria).options(
                 joinedload(Tutoria.tutor).joinedload(Tutor.usuario),
                 joinedload(Tutoria.matricula).joinedload(Matricula.estudiante).joinedload(Estudiante.usuario),

@@ -4,6 +4,7 @@ from sqlalchemy import Column, Integer, String, Boolean, DateTime, func
 from sqlalchemy.orm import relationship
 from app.db.database import Base
 
+
 # Esta clase es nuestro modelo y representa la tabla "usuarios" en la BD
 class Usuario(Base):
     __tablename__ = "usuarios"
@@ -24,3 +25,5 @@ class Usuario(Base):
     
     # "Un usuario puede tener un perfil de estudiante asociado"
     estudiante_perfil = relationship("Estudiante", back_populates="usuario", uselist=False, cascade="all, delete-orphan")
+
+    coordinador_perfil = relationship("Coordinador", back_populates="usuario", uselist=False, cascade="all, delete-orphan")

@@ -25,3 +25,15 @@ def get_tutor_id_by_user_email(db: Session, email: str) -> Optional[int]:
     """)
     result = db.execute(query, {"email": email}).scalar_one_or_none()
     return result
+
+# ✅ --- AÑADIR ESTA NUEVA FUNCIÓN ---
+def get_coordinador_carrera_by_user_email(db: Session, email: str) -> Optional[str]:
+    """Obtiene la carrera asignada a un coordinador a partir del correo del usuario."""
+    query = text("""
+        SELECT c.carrera
+        FROM tutorias_unach.coordinadores c
+        JOIN tutorias_unach.usuarios u ON c.usuario_id = u.id
+        WHERE u.correo = :email;
+    """)
+    result = db.execute(query, {"email": email}).scalar_one_or_none()
+    return result

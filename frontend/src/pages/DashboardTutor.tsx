@@ -87,6 +87,20 @@ const DashboardTutor: React.FC = () => {
     };
   };
 
+  const riskColorClasses = {
+    green: 'bg-green-200 text-green-800',
+    yellow: 'bg-yellow-200 text-yellow-800',
+    red: 'bg-red-200 text-red-800',
+    gray: 'bg-gray-200 text-gray-800', // Para N/A
+  };
+  
+  const situacionColorClasses = {
+      APROBADO: 'bg-green-100 text-green-800',
+      REPROBADO: 'bg-red-100 text-red-800',
+      Pendiente: 'bg-gray-100 text-gray-800',
+      DEFAULT: 'bg-gray-100 text-gray-800',
+  };
+
   return (
     <div className="space-y-8">
       <h1 className="text-3xl font-bold text-gray-800">Bienvenido, Tutor {nombre}</h1>
@@ -169,14 +183,27 @@ const DashboardTutor: React.FC = () => {
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Parcial 2</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Final</th>
                           <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
+                          {/* ✅ 2. AÑADE LA NUEVA CABECERA DE RIESGO */}
+                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nivel de Riesgo</th>
                         </tr>
                       </thead>
                       <tbody className="bg-white divide-y divide-gray-200">
-                        {cursoData.estudiantes.map((estudiante, idx) => (
+                        {cursoData.estudiantes.map((estudiante, idx) => {
+                          
+                          // ✅ 3. LÓGICA DE COLOR PARA SITUACIÓN
+                          const situacionKey = (estudiante.situacion || 'Pendiente') as keyof typeof situacionColorClasses;
+                          const situacionColor = situacionColorClasses[situacionKey] || situacionColorClasses.DEFAULT;
+                          
+                          // ✅ 4. LÓGICA DE COLOR PARA RIESGO
+                          const riesgoKey = (estudiante.riesgo_color || 'gray') as keyof typeof riskColorClasses;
+                          const riesgoColor = riskColorClasses[riesgoKey] || riskColorClasses.gray;
+
+                          return (
                           <tr key={`${estudiante.estudiante_id}-${idx}`} className="hover:bg-gray-50">
                             <td className="px-4 py-3 whitespace-nowrap font-medium text-gray-900">
                               {estudiante.estudiante_nombre}
                             </td>
+                            {/* ... (celdas de parcial1, parcial2, final - sin cambios) ... */}
                             <td className="px-4 py-3 whitespace-nowrap text-gray-700">
                               {estudiante.parcial1 !== null ? Number(estudiante.parcial1).toFixed(2) : 'N/A'}
                             </td>
@@ -187,22 +214,22 @@ const DashboardTutor: React.FC = () => {
                               {estudiante.final !== null ? Number(estudiante.final).toFixed(2) : 'N/A'}
                             </td>
                             <td className="px-4 py-3 whitespace-nowrap">
-                              {estudiante.situacion ? (
-                                <span className={`px-2 py-1 text-xs font-semibold rounded-full ${
-                                  estudiante.situacion === 'APROBADO' 
-                                    ? 'bg-green-100 text-green-800' 
-                                    : 'bg-red-100 text-red-800'
-                                }`}>
-                                  {estudiante.situacion}
+                              {/* ✅ 5. APLICA EL COLOR A LA SITUACIÓN */}
+                                <span className={`px-2 py-1 text-xs font-semibold rounded-full ${situacionColor}`}>
+                                  {estudiante.situacion || 'Pendiente'}
                                 </span>
-                              ) : (
-                                <span className="px-2 py-1 text-xs font-semibold rounded-full bg-gray-100 text-gray-800">
-                                  Pendiente
+                            </td>
+                            {/* ✅ 6. AÑADE LA NUEVA CELDA DE RIESGO */}
+                            <td className="px-4 py-3 whitespace-nowrap">
+                                <span 
+                                  className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${riesgoColor}`}
+                                  title={`Probabilidad de riesgo: ${estudiante.probabilidad_riesgo || 0}%`}
+                                >
+                                  {estudiante.riesgo_nivel || 'N/A'}
                                 </span>
-                              )}
                             </td>
                           </tr>
-                        ))}
+                        )})}
                       </tbody>
                     </table>
                   </div>

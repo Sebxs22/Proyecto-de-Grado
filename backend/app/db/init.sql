@@ -39,6 +39,15 @@ CREATE TABLE IF NOT EXISTS estudiantes (
 );
 
 -- -----------------------------------------------------
+-- ✅ NUEVA TABLA: coordinadores
+-- -----------------------------------------------------
+CREATE TABLE IF NOT EXISTS coordinadores (
+    id SERIAL PRIMARY KEY,
+    usuario_id INTEGER UNIQUE NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    carrera VARCHAR(100) NOT NULL
+);
+
+-- -----------------------------------------------------
 -- Tabla: asignaturas
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS asignaturas (

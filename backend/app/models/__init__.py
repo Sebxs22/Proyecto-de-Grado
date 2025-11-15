@@ -7,6 +7,7 @@ from .periodo_academico import PeriodoAcademico
 from .asignatura import Asignatura
 from .matricula import Matricula
 from .nota import Nota
-# --- ASEGÚRATE DE QUE ESTAS DOS LÍNEAS ESTÉN ---
 from .tutoria import Tutoria
 from .evaluacion import Evaluacion
+# ✅ --- AÑADE ESTA LÍNEA AL FINAL ---
+from .coordinador import Coordinador

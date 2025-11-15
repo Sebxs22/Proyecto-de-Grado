@@ -2,28 +2,16 @@
 
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from typing import Dict, Any, Optional
-# ✅ AGREGADO: Importar el servicio de evaluación
+from typing import Dict, Any, Optional, List
 from app.services.evaluacion_service import evaluacion_service 
-
-def get_tutor_id_by_user_email(db: Session, email: str) -> Optional[int]:
-    """Obtiene el ID del perfil del tutor a partir del correo del usuario."""
-    query = text("""
-        SELECT t.id
-        FROM tutorias_unach.tutores t
-        JOIN tutorias_unach.usuarios u ON t.usuario_id = u.id
-        WHERE u.correo = :email;
-    """)
-    # Usamos scalar_one_or_none para obtener solo el valor de la columna 'id'
-    result = db.execute(query, {"email": email}).scalar_one_or_none()
-    return result
+from app.services.prediction_service import prediction_service
 
 def get_tutor_dashboard_data(db: Session, tutor_id: int) -> Dict[str, Any]:
     """
     Obtiene los datos para el dashboard del tutor, incluyendo cursos,
-    tutorías pendientes Y la calificación promedio.
+    tutorías pendientes, calificación promedio Y EL RIESGO PREDICTIVO.
     """
-    # Consulta 1: Datos detallados de cursos y estudiantes asignados
+    
     query_cursos = text("""
         SELECT
             pa.nombre AS periodo,
@@ -33,7 +21,8 @@ def get_tutor_dashboard_data(db: Session, tutor_id: int) -> Dict[str, Any]:
             n.parcial1,
             n.parcial2,
             n.final,
-            n.situacion
+            n.situacion,
+            m.id AS matricula_id
         FROM tutorias_unach.matriculas m
         JOIN tutorias_unach.estudiantes e ON m.estudiante_id = e.id
         JOIN tutorias_unach.usuarios u ON e.usuario_id = u.id
@@ -45,7 +34,33 @@ def get_tutor_dashboard_data(db: Session, tutor_id: int) -> Dict[str, Any]:
     """)
     cursos_result = db.execute(query_cursos, {"tutor_id": tutor_id}).mappings().all()
 
-    # Consulta 2: Tutorías solicitadas
+    cursos_con_riesgo = []
+    for row in cursos_result:
+        materia_dict = dict(row)
+        situacion = materia_dict.get('situacion')
+        
+        # ✅ --- INICIO DE LÓGICA DE RIESGO MODIFICADA (IDÉNTICA AL OTRO SERVICIO) ---
+        if situacion not in ['APROBADO', 'REPROBADO']:
+            # 1. Si está en curso, predecimos
+            risk_data = prediction_service.predict_risk(
+                db=db, 
+                estudiante_id=materia_dict['estudiante_id'], 
+                matricula_id=materia_dict['matricula_id']
+            )
+            materia_dict.update(risk_data)
+        else:
+            # 2. Si ya finalizó, mostramos el resultado final
+            if situacion == 'REPROBADO':
+                materia_dict['riesgo_nivel'] = 'Riesgo Alto (Finalizado)'
+                materia_dict['riesgo_color'] = 'red'
+            else: # APROBADO
+                materia_dict['riesgo_nivel'] = 'Riesgo Bajo (Finalizado)'
+                materia_dict['riesgo_color'] = 'green'
+            materia_dict['probabilidad_riesgo'] = None # Ya no es una probabilidad
+        # ✅ --- FIN DE LÓGICA DE RIESGO ---
+            
+        cursos_con_riesgo.append(materia_dict)
+    
     query_tutorias = text("""
         SELECT
             t.id AS tutoria_id,
@@ -64,12 +79,10 @@ def get_tutor_dashboard_data(db: Session, tutor_id: int) -> Dict[str, Any]:
     """)
     tutorias_result = db.execute(query_tutorias, {"tutor_id": tutor_id}).mappings().all()
 
-    # ✅ NUEVO: Obtener la calificación promedio
-    # Se asume que evaluacion_service.py fue creado con get_tutor_average_rating
     average_rating = evaluacion_service.get_tutor_average_rating(db, tutor_id)
 
     return {
-        "cursos": [dict(row) for row in cursos_result],
+        "cursos": cursos_con_riesgo, 
         "tutorias_pendientes": [dict(row) for row in tutorias_result],
-        "average_rating": average_rating # ✅ ENVIAR CALIFICACIÓN
+        "average_rating": average_rating
     }

@@ -3,31 +3,97 @@
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from typing import Dict, Any, List, Optional
+from datetime import datetime 
 
-# ✅ ELIMINADA: La función get_student_id_by_user_email se mueve a profile_service.py
+from app.services.prediction_service import prediction_service
+from app.services.tutoria_service import tutoria_service
+from app.schemas.tutoria import TutoriaCreate
+
+def _crear_tutoria_proactiva(db: Session, matricula: Dict[str, Any], riesgo_nivel: str):
+    """
+    Función interna para crear una tutoría de refuerzo.
+    ✅ MODIFICADO: Ahora solo la crea si NO existe OTRA tutoría
+    en estado 'solicitada' o 'programada' Y si no se ha 'realizado' ya una tutoría de refuerzo.
+    """
+    try:
+        tema_riesgo = f"Refuerzo por Riesgo {riesgo_nivel.upper()} Detectado"
+
+        # ✅ --- INICIO DE LA LÓGICA DE VALIDACIÓN MEJORADA ---
+        
+        # 1. ¿Ya existe una tutoría abierta (solicitada/programada) PARA ESTA MATRÍCULA?
+        #    Si el estudiante ya pidió ayuda, no creamos otra.
+        query_abierta = text("""
+            SELECT 1 FROM tutorias_unach.tutorias
+            WHERE matricula_id = :matricula_id
+            AND estado IN ('solicitada', 'programada')
+        """)
+        existe_abierta = db.execute(query_abierta, {"matricula_id": matricula["matricula_id"]}).scalar()
+
+        # 2. ¿Ya se completó (realizada) una tutoría DE ESTE TEMA DE RIESGO?
+        #    Si ya le dimos refuerzo, no creamos otra (a menos que no asistiera).
+        query_completada = text("""
+            SELECT 1 FROM tutorias_unach.tutorias
+            WHERE matricula_id = :matricula_id
+            AND tema = :tema_riesgo
+            AND estado = 'realizada'
+        """)
+        existe_completada = db.execute(query_completada, {
+            "matricula_id": matricula["matricula_id"],
+            "tema_riesgo": tema_riesgo
+        }).scalar()
+
+        # Si ya hay una abierta (de cualquier tipo) O ya se completó una de refuerzo,
+        # O si no hay tutor, NO hacemos nada.
+        if existe_abierta or existe_completada or not matricula.get("tutor_id"):
+            return 
+        
+        # ✅ --- FIN DE LA LÓGICA DE VALIDACIÓN ---
+
+        # 3. Si no existe, crear el payload para la tutoría proactiva
+        tutoria_payload = TutoriaCreate(
+            matricula_id=matricula["matricula_id"],
+            tutor_id=matricula["tutor_id"],
+            fecha=datetime.now(), # El servicio lo ajustará al futuro
+            tema=tema_riesgo,
+            modalidad="Virtual" # Por defecto
+        )
+        
+        # 4. Crear la tutoría
+        tutoria_service.create_tutoria(
+            db=db,
+            tutoria=tutoria_payload,
+            estudiante_id=matricula["estudiante_id"],
+            tema_predeterminado=tema_riesgo,
+            modalidad_predeterminada="Virtual"
+        )
+        print(f"✅ Tutoría proactiva creada para matrícula {matricula['matricula_id']}")
+        
+    except Exception as e:
+        print(f"❌ Error al crear tutoría proactiva: {e}")
+        db.rollback()
+
 
 def get_student_kpis(db: Session, estudiante_id: int) -> Dict[str, Any]:
     """
     Obtiene los KPIs y el historial académico para un estudiante.
-    CORREGIDO: Usa LEFT JOIN para incluir materias sin notas y añade el nombre del tutor.
     """
     query_historial = text("""
         SELECT 
             a.nombre AS asignatura,
-            t_u.nombre AS tutor_nombre, -- ✅ AGREGADO: Nombre del tutor
+            t_u.nombre AS tutor_nombre,
             n.parcial1,
             n.parcial2,
             n.final,
             n.situacion,
             m.id AS matricula_id,
             m.tutor_id,
-            -- Calculamos el promedio solo si las notas existen
+            m.estudiante_id,
             (COALESCE(n.parcial1, 0) + COALESCE(n.parcial2, 0)) / 2 AS promedio_parciales
         FROM tutorias_unach.matriculas m
         JOIN tutorias_unach.asignaturas a ON m.asignatura_id = a.id
         LEFT JOIN tutorias_unach.notas n ON m.id = n.matricula_id
-        LEFT JOIN tutorias_unach.tutores t ON m.tutor_id = t.id -- ✅ Join a tutores
-        LEFT JOIN tutorias_unach.usuarios t_u ON t.usuario_id = t_u.id -- ✅ Join a usuarios para el nombre del tutor
+        LEFT JOIN tutorias_unach.tutores t ON m.tutor_id = t.id
+        LEFT JOIN tutorias_unach.usuarios t_u ON t.usuario_id = t_u.id
         WHERE m.estudiante_id = :estudiante_id
         ORDER BY m.periodo_id DESC, a.nombre;
     """)
@@ -37,20 +103,36 @@ def get_student_kpis(db: Session, estudiante_id: int) -> Dict[str, Any]:
     historial_detallado = []
     suma_finales, total_finales = 0, 0
     
+    # ✅ SOLUCIÓN: Flag para controlar que solo se cree UNA tutoría
+    tutoria_creada_en_esta_ejecucion = False
+    
     for materia in historial_result:
         materia_dict = dict(materia)
-        promedio = materia_dict.get('promedio_parciales')
-        riesgo_nivel, riesgo_color = "BAJO", "green"
         
-        # El cálculo de riesgo ahora funciona incluso con notas nulas
-        if promedio is not None:
-            if promedio < 8.0 and promedio >= 7.0:
-                riesgo_nivel, riesgo_color = "MEDIO", "yellow"
-            elif promedio < 7.0:
-                riesgo_nivel, riesgo_color = "ALTO", "red"
+        if materia_dict.get('situacion') not in ['APROBADO', 'REPROBADO']:
+            risk_data = prediction_service.predict_risk(
+                db=db, 
+                estudiante_id=materia_dict['estudiante_id'], 
+                matricula_id=materia_dict['matricula_id']
+            )
+            materia_dict.update(risk_data)
+            
+            riesgo_detectado = risk_data.get('riesgo_nivel')
+            
+            # ✅ SOLUCIÓN: Solo crear si NO se ha creado una en este request
+            if riesgo_detectado in ['ALTO', 'MEDIO'] and not tutoria_creada_en_esta_ejecucion:
+                resultado = _crear_tutoria_proactiva(db, materia_dict, riesgo_detectado)
+                if resultado:  # Si se creó la tutoría
+                    tutoria_creada_en_esta_ejecucion = True
+        else:
+            if materia_dict.get('situacion') == 'REPROBADO':
+                materia_dict['riesgo_nivel'] = 'Riesgo Alto (Finalizado)'
+                materia_dict['riesgo_color'] = 'red'
+            else: 
+                materia_dict['riesgo_nivel'] = 'Riesgo Bajo (Finalizado)'
+                materia_dict['riesgo_color'] = 'green'
+            materia_dict['probabilidad_riesgo'] = None
         
-        materia_dict['riesgo_nivel'] = riesgo_nivel
-        materia_dict['riesgo_color'] = riesgo_color
         materia_dict['tutor_nombre'] = materia_dict.get('tutor_nombre') or 'No Asignado'
         historial_detallado.append(materia_dict)
         
@@ -67,6 +149,3 @@ def get_student_kpis(db: Session, estudiante_id: int) -> Dict[str, Any]:
         },
         "historial_academico": historial_detallado
     }
-
-# ✅ ELIMINADA: La función get_student_id_by_user_email se ha movido a profile_service.py
-# Ya no necesitamos esta función aquí.

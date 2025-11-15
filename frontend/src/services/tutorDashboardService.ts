@@ -3,6 +3,7 @@
 import axiosClient from '../api/axiosClient';
 
 // --- Interfaces para tipar los datos que recibimos de la API ---
+// --- Interfaces para tipar los datos que recibimos de la API ---
 interface CursoTutor {
   periodo: string;
   asignatura: string;
@@ -12,6 +13,11 @@ interface CursoTutor {
   parcial2: number | null;
   final: number | null;
   situacion: string | null;
+  // ✅ INICIO DE CAMPOS AÑADIDOS
+  riesgo_nivel: string | null;
+  riesgo_color: string | null;
+  probabilidad_riesgo: number | null;
+  // ✅ FIN DE CAMPOS AÑADIDOS
 }
 
 interface TutoriaPendiente {

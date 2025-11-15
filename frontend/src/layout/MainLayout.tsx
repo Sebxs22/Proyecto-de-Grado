@@ -1,7 +1,7 @@
 // frontend/src/layout/MainLayout.tsx
 import React from 'react';
 import { Outlet, useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext'; // ✅ USANDO CONTEXT
+import { useAuth } from '../context/AuthContext'; 
 
 const Sidebar: React.FC = () => {
   const navigate = useNavigate();
@@ -23,12 +23,16 @@ const Sidebar: React.FC = () => {
         )}
         <nav>
           <ul>
-            <li 
-              className="mb-2 p-2 rounded hover:bg-gray-700 cursor-pointer transition-colors"
-              onClick={() => navigate('/')}
-            >
-                Dashboard
-            </li>
+            {/* ✅ MODIFICADO: El Dashboard genérico NO se muestra a coordinadores */}
+            {user?.rol !== 'coordinador' && (
+                <li 
+                className="mb-2 p-2 rounded hover:bg-gray-700 cursor-pointer transition-colors"
+                onClick={() => navigate('/')}
+                >
+                    Dashboard
+                </li>
+            )}
+
             {/* Enlace a Mis Tutorías para estudiantes */}
             {user?.rol === 'estudiante' && (
                 <li
@@ -38,7 +42,8 @@ const Sidebar: React.FC = () => {
                     Mis Tutorías
                 </li>
             )}
-            {/* ✅ AGREGADO: Enlace a Gestión de Tutorías para tutores */}
+            
+            {/* Enlace a Gestión de Tutorías para tutores */}
             {user?.rol === 'tutor' && (
                 <li
                     className="mb-2 p-2 rounded hover:bg-gray-700 cursor-pointer transition-colors"
@@ -47,14 +52,25 @@ const Sidebar: React.FC = () => {
                     Gestión de Tutorías
                 </li>
             )}
-            {/* ✅ AÑADIDO: Enlace al CMI para coordinadores */}
+            
+            {/* ✅ MODIFICADO: Enlaces para Coordinador */}
             {user?.rol === 'coordinador' && (
-                <li
-                    className="mb-2 p-2 rounded hover:bg-gray-700 cursor-pointer transition-colors"
-                    onClick={() => navigate('/dashboard/coordinador')}
-                >
-                    Cuadro de Mando
-                </li>
+                <>
+                    {/* ✅ RENOMBRADO: El CMI es ahora el Dashboard principal */}
+                    <li
+                        className="mb-2 p-2 rounded hover:bg-gray-700 cursor-pointer transition-colors"
+                        onClick={() => navigate('/dashboard/coordinador')}
+                    >
+                        Dashboard (CMI)
+                    </li>
+                    {/* ✅ NUEVO: El enlace a la página de Reportes */}
+                    <li
+                        className="mb-2 p-2 rounded hover:bg-gray-700 cursor-pointer transition-colors"
+                        onClick={() => navigate('/reportes/coordinador')}
+                    >
+                        Reporte Detallado
+                    </li>
+                </>
             )}
           </ul>
         </nav>

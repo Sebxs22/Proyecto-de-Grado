@@ -12,3 +12,5 @@ openpyxl
 python-multipart
 pydantic-settings
 argon2-cffi
+scikit-learn
+joblib
