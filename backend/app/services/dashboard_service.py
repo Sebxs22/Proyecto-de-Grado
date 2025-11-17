@@ -9,19 +9,15 @@ from app.services.prediction_service import prediction_service
 from app.services.tutoria_service import tutoria_service
 from app.schemas.tutoria import TutoriaCreate
 
-def _crear_tutoria_proactiva(db: Session, matricula: Dict[str, Any], riesgo_nivel: str):
+def _crear_tutoria_proactiva(db: Session, matricula: Dict[str, Any], riesgo_nivel: str) -> bool:
     """
     Función interna para crear una tutoría de refuerzo.
-    ✅ MODIFICADO: Ahora solo la crea si NO existe OTRA tutoría
-    en estado 'solicitada' o 'programada' Y si no se ha 'realizado' ya una tutoría de refuerzo.
+    ✅ Retorna True si creó la tutoría, False si no la creó.
     """
     try:
         tema_riesgo = f"Refuerzo por Riesgo {riesgo_nivel.upper()} Detectado"
 
-        # ✅ --- INICIO DE LA LÓGICA DE VALIDACIÓN MEJORADA ---
-        
-        # 1. ¿Ya existe una tutoría abierta (solicitada/programada) PARA ESTA MATRÍCULA?
-        #    Si el estudiante ya pidió ayuda, no creamos otra.
+        # 1. ¿Ya existe una tutoría abierta (solicitada/programada)?
         query_abierta = text("""
             SELECT 1 FROM tutorias_unach.tutorias
             WHERE matricula_id = :matricula_id
@@ -29,8 +25,7 @@ def _crear_tutoria_proactiva(db: Session, matricula: Dict[str, Any], riesgo_nive
         """)
         existe_abierta = db.execute(query_abierta, {"matricula_id": matricula["matricula_id"]}).scalar()
 
-        # 2. ¿Ya se completó (realizada) una tutoría DE ESTE TEMA DE RIESGO?
-        #    Si ya le dimos refuerzo, no creamos otra (a menos que no asistiera).
+        # 2. ¿Ya se completó una tutoría de refuerzo?
         query_completada = text("""
             SELECT 1 FROM tutorias_unach.tutorias
             WHERE matricula_id = :matricula_id
@@ -42,23 +37,18 @@ def _crear_tutoria_proactiva(db: Session, matricula: Dict[str, Any], riesgo_nive
             "tema_riesgo": tema_riesgo
         }).scalar()
 
-        # Si ya hay una abierta (de cualquier tipo) O ya se completó una de refuerzo,
-        # O si no hay tutor, NO hacemos nada.
         if existe_abierta or existe_completada or not matricula.get("tutor_id"):
-            return 
+            return False  # ✅ No se creó
         
-        # ✅ --- FIN DE LA LÓGICA DE VALIDACIÓN ---
-
-        # 3. Si no existe, crear el payload para la tutoría proactiva
+        # 3. Crear la tutoría
         tutoria_payload = TutoriaCreate(
             matricula_id=matricula["matricula_id"],
             tutor_id=matricula["tutor_id"],
-            fecha=datetime.now(), # El servicio lo ajustará al futuro
+            fecha=datetime.now(),
             tema=tema_riesgo,
-            modalidad="Virtual" # Por defecto
+            modalidad="Virtual"
         )
         
-        # 4. Crear la tutoría
         tutoria_service.create_tutoria(
             db=db,
             tutoria=tutoria_payload,
@@ -67,10 +57,12 @@ def _crear_tutoria_proactiva(db: Session, matricula: Dict[str, Any], riesgo_nive
             modalidad_predeterminada="Virtual"
         )
         print(f"✅ Tutoría proactiva creada para matrícula {matricula['matricula_id']}")
+        return True  # ✅ Se creó exitosamente
         
     except Exception as e:
         print(f"❌ Error al crear tutoría proactiva: {e}")
         db.rollback()
+        return False  # ✅ Falló la creación
 
 
 def get_student_kpis(db: Session, estudiante_id: int) -> Dict[str, Any]:
