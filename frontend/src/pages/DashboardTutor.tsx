@@ -2,53 +2,82 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { getTutorDashboard, TutorDashboard } from '../services/tutorDashboardService'; 
-// Ya no necesitamos actualizarEstadoTutoria aquí, se mueve a TutoriasTutor.tsx
+import { Link } from 'react-router-dom';
+import { 
+  Users, 
+  TrendingUp, 
+  AlertCircle, 
+  Star, 
+  Clock,
+  BookOpen,
+  School,
+  ChevronRight,
+  Calendar,
+  ChevronDown, // Para el acordeón
+  ChevronUp
+} from 'lucide-react';
 
-// ✅ Nueva función para parsear la nota de forma segura
+// Función auxiliar para parseo seguro
 const safeParseFloat = (value: number | null | undefined): number => {
-    // Si es nulo o indefinido, devuelve 0 para el cálculo (y se ignora en la cuenta)
     if (value === null || value === undefined) return 0;
-    
-    // Si ya es un número, lo devuelve. Si es un string, lo convierte.
     const num = Number(value);
-    
-    // Devuelve 0 si la conversión resulta en NaN (para evitar que NaN contamine la suma)
     return isNaN(num) ? 0 : num;
 };
-
 
 const DashboardTutor: React.FC = () => {
   const [dashboardData, setDashboardData] = useState<TutorDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Estado para controlar qué cursos están expandidos (Abiertos)
+  // Usamos un objeto donde la clave es el ID del curso y el valor es true/false
+  const [expandedCourses, setExpandedCourses] = useState<Record<string, boolean>>({});
 
   const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       const data = await getTutorDashboard();
-      console.log("📊 Dashboard tutor cargado:", data);
       setDashboardData(data);
+      
+      // Opcional: Si quieres que el PRIMER curso aparezca abierto por defecto
+      /*
+      if (data.cursos.length > 0) {
+          const firstKey = `${data.cursos[0].periodo} - ${data.cursos[0].asignatura}`;
+          setExpandedCourses({ [firstKey]: true });
+      }
+      */
+     
       setError(null);
     } catch (err) {
       console.error("❌ Error al cargar dashboard tutor:", err);
-      setError('No se pudo cargar la información. Asegúrate de haber iniciado sesión con un rol de tutor.');
+      setError('No se pudo cargar la información.');
     } finally {
       setLoading(false);
     }
   }, []);
 
-  useEffect(() => {
-    fetchDashboardData();
-  }, [fetchDashboardData]);
+  useEffect(() => { fetchDashboardData(); }, [fetchDashboardData]);
 
+  // Función para abrir/cerrar una tarjeta
+  const toggleCourse = (key: string) => {
+      setExpandedCourses(prev => ({
+          ...prev,
+          [key]: !prev[key] // Invierte el valor actual (true -> false, false -> true)
+      }));
+  };
 
-  if (loading) return <div className="text-center p-12">Cargando dashboard del tutor...</div>;
-  if (error || !dashboardData) return <div className="text-center text-red-500 p-12">{error || 'No se encontraron datos.'}</div>;
+  if (loading) return (
+    <div className="flex flex-col items-center justify-center h-96 text-unach-blue animate-pulse">
+      <School size={48} strokeWidth={1} />
+      <p className="mt-4 font-medium text-sm tracking-wide">CARGANDO PANEL DOCENTE...</p>
+    </div>
+  );
 
-  // ✅ CORREGIDO: Desestructuramos average_rating. Le damos un valor por defecto seguro (0.0)
+  if (error || !dashboardData) return <div className="text-center text-unach-red p-12 font-bold border border-red-100 bg-red-50 rounded-xl mt-10">{error || 'No se encontraron datos.'}</div>;
+
   const { nombre, cursos, tutorias_pendientes, average_rating = 0.0 } = dashboardData as TutorDashboard & { average_rating: number };
 
-  // Agrupamos los estudiantes por periodo y asignatura
+  // Agrupación por cursos
   const cursosAgrupados = cursos.reduce((acc, curso) => {
     const key = `${curso.periodo} - ${curso.asignatura}`;
     if (!acc[key]) {
@@ -62,183 +91,228 @@ const DashboardTutor: React.FC = () => {
     return acc;
   }, {} as Record<string, { periodo: string; asignatura: string; estudiantes: typeof cursos }>);
 
-  // Lógica para calcular estadísticas
   const calcularEstadisticas = (estudiantes: typeof cursos) => {
-    // Solo contamos a los estudiantes que tienen una nota final registrada
-    const estudiantesConNotaFinal = estudiantes.filter(e => e.final !== null);
-    
-    // Convertimos las notas a número de forma segura para la suma
-    const notasValidas = estudiantesConNotaFinal
-        .map(e => safeParseFloat(e.final))
-        .filter(n => n > 0 || n === 0); // Aseguramos que el parseo fue exitoso
-        
+    const estudiantesConNota = estudiantes.filter(e => e.final !== null);
+    const notasValidas = estudiantesConNota.map(e => safeParseFloat(e.final));
     const aprobados = estudiantes.filter(e => e.situacion === 'APROBADO').length;
     const reprobados = estudiantes.filter(e => e.situacion === 'REPROBADO').length;
-    
     const promedioFinal = notasValidas.length > 0
         ? (notasValidas.reduce((sum, n) => sum + n, 0) / notasValidas.length).toFixed(2)
-        : 'N/A'; // Si no hay notas finales válidas, devuelve N/A
-    
-    return {
-      total: estudiantes.length,
-      aprobados,
-      reprobados,
-      promedioFinal
-    };
+        : 'N/A';
+    return { total: estudiantes.length, aprobados, reprobados, promedioFinal };
   };
 
-  const riskColorClasses = {
-    green: 'bg-green-200 text-green-800',
-    yellow: 'bg-yellow-200 text-yellow-800',
-    red: 'bg-red-200 text-red-800',
-    gray: 'bg-gray-200 text-gray-800', // Para N/A
+  // Mapeo de colores
+  const riesgoColorMap: Record<string, string> = {
+      red: 'text-rose-700 bg-rose-50 border-rose-200 ring-1 ring-rose-100',
+      yellow: 'text-amber-700 bg-amber-50 border-amber-200 ring-1 ring-amber-100',
+      green: 'text-emerald-700 bg-emerald-50 border-emerald-200 ring-1 ring-emerald-100',
+      gray: 'text-gray-400 bg-gray-50 border-gray-200'
   };
-  
-  const situacionColorClasses = {
-      APROBADO: 'bg-green-100 text-green-800',
-      REPROBADO: 'bg-red-100 text-red-800',
-      Pendiente: 'bg-gray-100 text-gray-800',
-      DEFAULT: 'bg-gray-100 text-gray-800',
+
+  const situacionColorClasses: Record<string, string> = {
+      APROBADO: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
+      REPROBADO: 'bg-rose-100 text-rose-700 border border-rose-200',
+      Pendiente: 'bg-gray-100 text-gray-600 border border-gray-200',
   };
 
   return (
-    <div className="space-y-8">
-      <h1 className="text-3xl font-bold text-gray-800">Bienvenido, Tutor {nombre}</h1>
+    <div className="space-y-8 pb-12 animate-in fade-in duration-500">
+      
+      {/* HEADER */}
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-gray-200 pb-6">
+          <div>
+              <h1 className="text-3xl font-extrabold text-unach-blue flex items-center gap-3">
+                  Hola, Tutor {nombre.split(' ')[0]} <span className="text-2xl">👨‍🏫</span>
+              </h1>
+              <p className="text-gray-500 mt-1 ml-1 flex items-center gap-2 text-sm">
+                  <School size={16} /> Gestión Académica y Tutorial
+              </p>
+          </div>
+          <div className="hidden md:block text-right">
+             <p className="text-xs font-bold text-unach-blue/60 uppercase tracking-widest">Periodo Activo</p>
+             <p className="text-sm font-semibold text-gray-700">Noviembre 2025 - Abril 2026</p>
+          </div>
+      </div>
 
-      {/* ✅ SECCIÓN CALIFICACIÓN PROMEDIO Y RESUMEN DE TUTORÍAS */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Card de Rating */}
-        <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-green-500">
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Tu Calificación Promedio</h2>
-            <p className="text-green-600 font-extrabold text-4xl">
-                {/* ✅ Muestra el promedio: si es 0.0, se ve 0.00 / 5.0 */}
-                {Number(average_rating).toFixed(2)} / 5.0 
-            </p>
+      {/* TARJETAS KPI (Sin cambios) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-emerald-100 flex items-center justify-between hover:shadow-md transition-all group relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-full -mr-8 -mt-8 opacity-50 transition-transform group-hover:scale-110"></div>
+            <div className="z-10">
+                <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-2 flex items-center gap-2">
+                    <Star size={14} className="fill-emerald-600" /> Calificación Promedio
+                </p>
+                <div className="flex items-end gap-2">
+                    <span className="text-5xl font-black text-gray-800 tracking-tighter">
+                        {Number(average_rating).toFixed(2)}
+                    </span>
+                    <span className="text-lg text-gray-400 font-medium mb-1.5">/ 5.0</span>
+                </div>
+            </div>
+            <div className="h-16 w-16 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 shadow-sm z-10">
+                <TrendingUp size={32} strokeWidth={2} />
+            </div>
         </div>
         
-        {/* Card de Pendientes */}
-        <div className="bg-white p-6 rounded-lg shadow-md border-l-4 border-yellow-500">
-            <h2 className="text-2xl font-bold text-gray-800 mb-2">Resumen de Tutorías</h2>
-            {tutorias_pendientes.length > 0 ? (
-                <p className="text-yellow-600 font-semibold text-lg">
-                    Tienes <span className="text-3xl font-extrabold">{tutorias_pendientes.length}</span> solicitudes pendientes.
-                    <button 
-                        onClick={() => window.location.href = '/tutorias/tutor'}
-                        className="ml-4 text-blue-600 hover:text-blue-800 font-medium underline"
-                    >
-                        Ir a Gestión
-                    </button>
+        <div className={`p-6 rounded-xl shadow-sm border flex items-center justify-between hover:shadow-md transition-all group relative overflow-hidden ${tutorias_pendientes.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-100'}`}>
+            <div className="z-10">
+                <p className={`text-xs font-bold uppercase tracking-widest mb-2 flex items-center gap-2 ${tutorias_pendientes.length > 0 ? 'text-amber-700' : 'text-gray-400'}`}>
+                    <Clock size={14} /> Solicitudes Pendientes
                 </p>
-            ) : (
-                <p className="text-gray-600">No tienes tutorías pendientes de aprobación.</p>
-            )}
+                <div className="flex items-center gap-4">
+                    <span className={`text-5xl font-black tracking-tighter ${tutorias_pendientes.length > 0 ? 'text-amber-600' : 'text-gray-300'}`}>
+                        {tutorias_pendientes.length}
+                    </span>
+                    {tutorias_pendientes.length > 0 && (
+                        <Link 
+                            to="/tutorias/tutor"
+                            className="px-4 py-2 bg-white text-amber-700 text-xs font-bold rounded-lg shadow-sm hover:shadow hover:bg-amber-50 border border-amber-200 transition-all flex items-center gap-1"
+                        >
+                            Gestionar <ChevronRight size={14} />
+                        </Link>
+                    )}
+                </div>
+            </div>
+            <div className={`h-16 w-16 rounded-2xl flex items-center justify-center shadow-sm z-10 ${tutorias_pendientes.length > 0 ? 'bg-white text-amber-500' : 'bg-gray-50 text-gray-300'}`}>
+                <AlertCircle size={32} strokeWidth={2} />
+            </div>
         </div>
       </div>
 
-
-      {/* Sección de Cursos y Estudiantes (Se mantiene) */}
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Mis Cursos y Estudiantes</h2>
+      {/* SECCIÓN DE CURSOS (ACORDEÓN) */}
+      <div className="space-y-6">
+        <div className="flex items-center gap-3 mb-4">
+            <div className="p-2 bg-unach-blue rounded-lg text-white shadow-md">
+                <BookOpen size={20} />
+            </div>
+            <h2 className="text-xl font-bold text-gray-800">Mis Asignaturas</h2>
+        </div>
         
         {Object.keys(cursosAgrupados).length > 0 ? (
-          <div className="space-y-8">
-            {Object.entries(cursosAgrupados).map(([key, cursoData]) => {
-              const stats = calcularEstadisticas(cursoData.estudiantes);
-              
-              return (
-                <div key={key} className="border border-gray-200 rounded-lg p-6">
-                  {/* Header del Curso */}
-                  <div className="mb-4">
-                    <h3 className="text-xl font-semibold text-gray-800">{cursoData.asignatura}</h3>
-                    <p className="text-sm text-gray-600">{cursoData.periodo}</p>
+          Object.entries(cursosAgrupados).map(([key, cursoData]) => {
+            const stats = calcularEstadisticas(cursoData.estudiantes);
+            const isExpanded = !!expandedCourses[key]; // ¿Está abierta esta tarjeta?
+            
+            return (
+              // Contenedor principal de la tarjeta
+              <div key={key} className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden transition-all hover:shadow-md">
+                
+                {/* HEADER DEL CURSO (Ahora es clicable) */}
+                <div 
+                    onClick={() => toggleCourse(key)}
+                    className="p-6 bg-white cursor-pointer group select-none flex flex-col md:flex-row md:items-center justify-between gap-4"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                        <h3 className="text-lg font-extrabold text-unach-blue group-hover:text-blue-700 transition-colors">
+                            {cursoData.asignatura}
+                        </h3>
+                        {/* Indicador de estado abierto/cerrado */}
+                        {isExpanded ? <ChevronUp size={20} className="text-gray-400" /> : <ChevronDown size={20} className="text-gray-400" />}
+                    </div>
+                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mt-1 flex items-center gap-1">
+                        <Calendar size={12} /> {cursoData.periodo}
+                    </p>
                   </div>
-
-                  {/* Estadísticas del Curso */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                    <div className="bg-blue-50 p-4 rounded-lg">
-                      <p className="text-sm text-gray-600">Total Estudiantes</p>
-                      <p className="text-2xl font-bold text-blue-600">{stats.total}</p>
+                  
+                  {/* MINI STATS (Incluyendo Promedio) */}
+                  <div className="flex flex-wrap gap-3 items-center">
+                    <div className="px-3 py-1.5 bg-gray-50 rounded-lg border border-gray-100 flex flex-col items-center min-w-[80px]">
+                        <p className="text-[9px] text-gray-400 font-bold uppercase">Total Est.</p>
+                        <p className="text-base font-bold text-gray-700">{stats.total}</p>
                     </div>
-                    <div className="bg-green-50 p-4 rounded-lg">
-                      <p className="text-sm text-gray-600">Aprobados</p>
-                      <p className="text-2xl font-bold text-green-600">{stats.aprobados}</p>
+                    {/* ✅ AQUÍ AGREGAMOS EL PROMEDIO */}
+                    <div className="px-3 py-1.5 bg-indigo-50 rounded-lg border border-indigo-100 flex flex-col items-center min-w-[80px]">
+                        <p className="text-[9px] text-indigo-600 font-bold uppercase flex items-center gap-1">Promedio</p>
+                        <p className="text-base font-bold text-indigo-700">{stats.promedioFinal}</p>
                     </div>
-                    <div className="bg-red-50 p-4 rounded-lg">
-                      <p className="text-sm text-gray-600">Reprobados</p>
-                      <p className="text-2xl font-bold text-red-600">{stats.reprobados}</p>
+                    <div className="px-3 py-1.5 bg-emerald-50 rounded-lg border border-emerald-100 flex flex-col items-center min-w-[80px]">
+                        <p className="text-[9px] text-emerald-600 font-bold uppercase">Aprobados</p>
+                        <p className="text-base font-bold text-emerald-700">{stats.aprobados}</p>
                     </div>
-                    <div className="bg-purple-50 p-4 rounded-lg">
-                      <p className="text-sm text-gray-600">Promedio General</p>
-                      <p className="text-2xl font-bold text-purple-600">{stats.promedioFinal}</p>
+                    <div className="px-3 py-1.5 bg-rose-50 rounded-lg border border-rose-100 flex flex-col items-center min-w-[80px]">
+                        <p className="text-[9px] text-rose-600 font-bold uppercase">Reprobados</p>
+                        <p className="text-base font-bold text-rose-700">{stats.reprobados}</p>
                     </div>
-                  </div>
-
-                  {/* Tabla de Estudiantes */}
-                  <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                      <thead className="bg-gray-50">
-                        <tr>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estudiante</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Parcial 1</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Parcial 2</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Final</th>
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                          {/* ✅ 2. AÑADE LA NUEVA CABECERA DE RIESGO */}
-                          <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Nivel de Riesgo</th>
-                        </tr>
-                      </thead>
-                      <tbody className="bg-white divide-y divide-gray-200">
-                        {cursoData.estudiantes.map((estudiante, idx) => {
-                          
-                          // ✅ 3. LÓGICA DE COLOR PARA SITUACIÓN
-                          const situacionKey = (estudiante.situacion || 'Pendiente') as keyof typeof situacionColorClasses;
-                          const situacionColor = situacionColorClasses[situacionKey] || situacionColorClasses.DEFAULT;
-                          
-                          // ✅ 4. LÓGICA DE COLOR PARA RIESGO
-                          const riesgoKey = (estudiante.riesgo_color || 'gray') as keyof typeof riskColorClasses;
-                          const riesgoColor = riskColorClasses[riesgoKey] || riskColorClasses.gray;
-
-                          return (
-                          <tr key={`${estudiante.estudiante_id}-${idx}`} className="hover:bg-gray-50">
-                            <td className="px-4 py-3 whitespace-nowrap font-medium text-gray-900">
-                              {estudiante.estudiante_nombre}
-                            </td>
-                            {/* ... (celdas de parcial1, parcial2, final - sin cambios) ... */}
-                            <td className="px-4 py-3 whitespace-nowrap text-gray-700">
-                              {estudiante.parcial1 !== null ? Number(estudiante.parcial1).toFixed(2) : 'N/A'}
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap text-gray-700">
-                              {estudiante.parcial2 !== null ? Number(estudiante.parcial2).toFixed(2) : 'N/A'}
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap font-bold text-gray-900">
-                              {estudiante.final !== null ? Number(estudiante.final).toFixed(2) : 'N/A'}
-                            </td>
-                            <td className="px-4 py-3 whitespace-nowrap">
-                              {/* ✅ 5. APLICA EL COLOR A LA SITUACIÓN */}
-                                <span className={`px-2 py-1 text-xs font-semibold rounded-full ${situacionColor}`}>
-                                  {estudiante.situacion || 'Pendiente'}
-                                </span>
-                            </td>
-                            {/* ✅ 6. AÑADE LA NUEVA CELDA DE RIESGO */}
-                            <td className="px-4 py-3 whitespace-nowrap">
-                                <span 
-                                  className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${riesgoColor}`}
-                                  title={`Probabilidad de riesgo: ${estudiante.probabilidad_riesgo || 0}%`}
-                                >
-                                  {estudiante.riesgo_nivel || 'N/A'}
-                                </span>
-                            </td>
-                          </tr>
-                        )})}
-                      </tbody>
-                    </table>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+
+                {/* CUERPO DEL CURSO (Tabla) - Solo se muestra si isExpanded es true */}
+                {isExpanded && (
+                    <div className="border-t border-gray-100 animate-in slide-in-from-top-2 duration-200">
+                        <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-100">
+                            <thead className="bg-gray-50 text-gray-500">
+                            <tr>
+                                <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider w-1/3">Estudiante</th>
+                                <th className="px-6 py-3 text-center text-xs font-bold uppercase tracking-wider">P1</th>
+                                <th className="px-6 py-3 text-center text-xs font-bold uppercase tracking-wider">P2</th>
+                                <th className="px-6 py-3 text-center text-xs font-bold uppercase tracking-wider">Final</th>
+                                <th className="px-6 py-3 text-center text-xs font-bold uppercase tracking-wider">Estado</th>
+                                <th className="px-6 py-3 text-center text-xs font-bold uppercase tracking-wider">Riesgo Predictivo</th>
+                            </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-50">
+                            {cursoData.estudiantes.map((estudiante, idx) => {
+                                const situacionColor = situacionColorClasses[estudiante.situacion || 'Pendiente'] || situacionColorClasses.Pendiente;
+                                const riesgoStyle = riesgoColorMap[estudiante.riesgo_color || 'gray'];
+
+                                return (
+                                <tr key={`${estudiante.estudiante_id}-${idx}`} className="hover:bg-blue-50/30 transition-colors">
+                                <td className="px-6 py-3 whitespace-nowrap">
+                                    <div className="flex items-center gap-3">
+                                        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500">
+                                            {estudiante.estudiante_nombre.charAt(0)}
+                                        </div>
+                                        <span className="font-medium text-sm text-gray-700">
+                                            {estudiante.estudiante_nombre}
+                                        </span>
+                                    </div>
+                                </td>
+                                
+                                <td className="px-6 py-3 text-center text-sm text-gray-500">
+                                    {estudiante.parcial1 !== null ? Number(estudiante.parcial1).toFixed(2) : '-'}
+                                </td>
+                                <td className="px-6 py-3 text-center text-sm text-gray-500">
+                                    {estudiante.parcial2 !== null ? Number(estudiante.parcial2).toFixed(2) : '-'}
+                                </td>
+                                <td className="px-6 py-3 text-center">
+                                    <span className={`text-sm font-bold ${estudiante.final && estudiante.final >= 7 ? 'text-unach-blue' : 'text-gray-400'}`}>
+                                        {estudiante.final !== null ? Number(estudiante.final).toFixed(2) : '-'}
+                                    </span>
+                                </td>
+                                
+                                <td className="px-6 py-3 text-center">
+                                    <span className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-full shadow-sm ${situacionColor}`}>
+                                        {estudiante.situacion || 'En Curso'}
+                                    </span>
+                                </td>
+                                
+                                <td className="px-6 py-3 text-center">
+                                    <div 
+                                        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border ${riesgoStyle}`}
+                                        title={`Probabilidad: ${estudiante.probabilidad_riesgo || 0}%`}
+                                    >
+                                        <span className={`w-1.5 h-1.5 rounded-full ${estudiante.riesgo_color === 'red' ? 'bg-rose-500 animate-pulse' : estudiante.riesgo_color === 'yellow' ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+                                        <span className="text-[10px] font-bold">{estudiante.riesgo_nivel?.replace('Riesgo ', '') || 'N/A'}</span>
+                                    </div>
+                                </td>
+                                </tr>
+                            )})}
+                            </tbody>
+                        </table>
+                        </div>
+                    </div>
+                )}
+              </div>
+            );
+          })
         ) : (
-          <p className="text-gray-600">No tienes cursos asignados.</p>
+          <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+              <Users size={48} className="mx-auto text-gray-300 mb-3" />
+              <p className="text-gray-500 font-medium">No tienes asignaturas ni estudiantes asignados actualmente.</p>
+          </div>
         )}
       </div>
     </div>

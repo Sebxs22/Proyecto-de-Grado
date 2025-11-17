@@ -28,35 +28,68 @@ const Login: React.FC = () => {
 
 
   return (
-    <div className="flex items-center justify-center h-screen bg-gray-200">
-      <div className="w-full max-w-sm p-8 space-y-6 bg-white rounded-lg shadow-xl">
-        <h2 className="text-2xl font-bold text-center text-gray-800">Sistema de Tutorías</h2>
-        <form onSubmit={handleSubmit} className="space-y-6">
+    // 1. Fondo con degradado institucional (Azul a Rojo)
+    <div className="flex items-center justify-center h-screen bg-unach-gradient">
+      
+      <div className="w-full max-w-sm p-8 space-y-6 bg-white rounded-xl shadow-2xl border-t-4 border-unach-red">
+        
+        {/* 2. Encabezado más corporativo */}
+        <div className="text-center">
+          <h2 className="text-3xl font-extrabold text-unach-blue">
+            Sistema de Tutorías
+          </h2>
+          <p className="text-sm text-gray-500 mt-2">Universidad Nacional de Chimborazo</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-sm font-medium text-gray-700">Correo Electrónico</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">
+              Correo Institucional
+            </label>
             <input
               type="text"
               value={correo}
               onChange={(e) => setCorreo(e.target.value)}
-              className="w-full px-3 py-2 mt-1 border rounded-md focus:ring-blue-500 focus:border-blue-500"
+              placeholder="ejemplo@unach.edu.ec"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-unach-blue focus:border-transparent outline-none transition-all"
               required
             />
           </div>
+          
           <div>
-            <label className="block text-sm font-medium text-gray-700">Contraseña</label>
+            <label className="block text-sm font-semibold text-gray-700 mb-1">
+              Contraseña
+            </label>
             <input
               type="password"
               value={contrasena}
               onChange={(e) => setContrasena(e.target.value)}
-              className="w-full px-3 py-2 mt-1 border rounded-md focus:ring-blue-500 focus:border-blue-500"
+              placeholder="••••••••"
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-unach-blue focus:border-transparent outline-none transition-all"
               required
             />
           </div>
-          {error && <p className="text-xs text-red-600 text-center">{error}</p>}
-          <button type="submit" className="w-full py-2 px-4 bg-blue-600 text-white font-semibold rounded-md hover:bg-blue-700">
-            Ingresar
+
+          {error && (
+            <div className="p-3 rounded bg-red-50 text-unach-red text-sm font-medium text-center border border-red-100">
+              {error}
+            </div>
+          )}
+
+          {/* 3. Botón con el color primario (Azul) y hover secundario (Rojo) */}
+          <button
+            type="submit"
+            className="w-full py-3 px-4 bg-unach-blue text-white font-bold rounded-lg hover:bg-unach-red transform hover:-translate-y-0.5 transition-all duration-200 shadow-md hover:shadow-lg"
+          >
+            Iniciar Sesión
           </button>
         </form>
+        
+        <div className="text-center mt-4">
+          <p className="text-xs text-gray-400">
+            © 2025 Facultad de Ingeniería - UNACH
+          </p>
+        </div>
       </div>
     </div>
   );

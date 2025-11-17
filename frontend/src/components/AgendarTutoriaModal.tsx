@@ -1,7 +1,17 @@
 // frontend/src/components/AgendarTutoriaModal.tsx
 import React, { useState } from 'react';
-import { crearTutoria } from '../services/tutoriaService';
-import { TutoriaPayload } from '../services/tutoriaService';
+import { crearTutoria, TutoriaPayload } from '../services/tutoriaService';
+// 1. Importamos los íconos de Lucide
+import { 
+  X, 
+  Calendar, 
+  Clock, 
+  MapPin, 
+  Video, 
+  Type, 
+  BookOpen, 
+  CheckCircle2 
+} from 'lucide-react';
 
 interface Props {
   isOpen: boolean;
@@ -27,7 +37,7 @@ const AgendarTutoriaModal: React.FC<Props> = ({
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // ✅ Generar opciones de hora cada 30 minutos (7 AM - 8 PM)
+  // Generador de horas (lógica original mantenida)
   const generarOpcionesHora = () => {
     const opciones = [];
     for (let h = 7; h <= 20; h++) {
@@ -49,9 +59,8 @@ const AgendarTutoriaModal: React.FC<Props> = ({
       setError('Error: No se ha seleccionado una materia o tutor.');
       return;
     }
-
     if (!fecha || !hora) {
-      setError('Por favor completa todos los campos.');
+      setError('Por favor completa todos los campos obligatorios.');
       return;
     }
 
@@ -59,18 +68,12 @@ const AgendarTutoriaModal: React.FC<Props> = ({
     setLoading(true);
 
     try {
-      // ✅ SOLUCIÓN DEFINITIVA AL PROBLEMA DE ZONA HORARIA
-      // Creamos la fecha EXACTAMENTE como la ingresó el usuario
-      // SIN conversión a UTC, SIN timezone info
       const fechaHoraLocalString = `${fecha}T${hora}:00`;
       
-      // Log para debugging (puedes removerlo después)
-      console.log('📅 Fecha y hora seleccionada:', fechaHoraLocalString);
-
       const payload: TutoriaPayload = {
         matricula_id: matriculaId,
         tutor_id: tutorId,
-        fecha: fechaHoraLocalString, // ✅ String limpio sin timezone
+        fecha: fechaHoraLocalString,
         duracion_min: 60,
         tema,
         modalidad,
@@ -78,13 +81,13 @@ const AgendarTutoriaModal: React.FC<Props> = ({
 
       await crearTutoria(payload);
       
-      // Resetear formulario
+      // Limpiar y cerrar
       setTema('');
       setFecha('');
       setHora('');
       setModalidad('Presencial');
       
-      alert('¡Tutoría solicitada con éxito! El tutor la revisará pronto.');
+      alert('¡Solicitud enviada correctamente!');
       onClose();
       onSuccess();
     } catch (err: any) {
@@ -99,134 +102,155 @@ const AgendarTutoriaModal: React.FC<Props> = ({
   };
 
   if (!isOpen) return null;
-
   const opcionesHora = generarOpcionesHora();
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex justify-center items-center z-50 p-4">
-      <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-        {/* Header con gradiente */}
-        <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-6 rounded-t-xl">
-          <h2 className="text-2xl font-bold text-white">Agendar Nueva Tutoría</h2>
-          <p className="text-blue-100 text-sm mt-1">Completa los datos para solicitar tu sesión</p>
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex justify-center items-center z-50 p-4 animate-in fade-in duration-200">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto transform transition-all scale-100">
+        
+        {/* 1. HEADER INSTITUCIONAL */}
+        <div className="bg-unach-blue p-6 flex justify-between items-start sticky top-0 z-10">
+          <div>
+            <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+              <BookOpen size={24} className="text-blue-200" />
+              Agendar Tutoría
+            </h2>
+            <p className="text-blue-100 text-sm mt-1 opacity-90">Solicita una sesión de refuerzo académico</p>
+          </div>
+          <button 
+            onClick={onClose}
+            className="text-white/70 hover:text-white transition-colors p-1 hover:bg-white/10 rounded-full"
+          >
+            <X size={24} />
+          </button>
         </div>
 
-        <div className="p-6">
-          {/* Card de información del tutor */}
-          <div className="mb-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
-            <p className="text-sm text-blue-600 font-medium mb-1">Tutor Asignado</p>
-            <p className="text-lg font-semibold text-blue-900">
-              {tutorNombre || 'Sin asignar'}
-            </p>
+        <div className="p-8">
+          {/* 2. TARJETA DE TUTOR */}
+          <div className="mb-8 p-4 bg-blue-50/50 border border-blue-100 rounded-xl flex items-center gap-4">
+            <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center text-unach-blue font-bold text-lg border border-blue-200">
+              {tutorNombre ? tutorNombre.charAt(0) : '?'}
+            </div>
+            <div>
+               <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Tutor Asignado</p>
+               <p className="text-gray-800 font-bold text-lg leading-tight">{tutorNombre || 'Sin asignar'}</p>
+            </div>
           </div>
 
-          <form onSubmit={handleSubmit} className="space-y-5">
-            {/* Campo: Tema */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-2">
-                Tema de la Tutoría *
+          <form onSubmit={handleSubmit} className="space-y-6">
+            
+            {/* CAMPO: TEMA */}
+            <div className="space-y-2">
+              <label className="block text-sm font-bold text-gray-700 flex items-center gap-2">
+                <Type size={16} className="text-unach-blue" />
+                Tema a tratar
               </label>
               <input
                 type="text"
                 value={tema}
                 onChange={(e) => setTema(e.target.value)}
-                placeholder="Ej: Integrales definidas, Ecuaciones diferenciales..."
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                placeholder="Ej: Derivadas parciales, Repaso examen..."
+                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-unach-blue focus:border-transparent focus:bg-white transition-all outline-none placeholder:text-gray-400"
                 required
               />
             </div>
 
-            {/* Campos: Fecha y Hora */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Fecha */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  📅 Fecha *
+            {/* CAMPOS: FECHA Y HORA (GRID) */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="space-y-2">
+                <label className="block text-sm font-bold text-gray-700 flex items-center gap-2">
+                  <Calendar size={16} className="text-unach-blue" />
+                  Fecha
                 </label>
                 <input
                   type="date"
                   value={fecha}
                   onChange={(e) => setFecha(e.target.value)}
                   min={new Date().toISOString().split('T')[0]}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-unach-blue focus:border-transparent focus:bg-white transition-all outline-none text-gray-700 cursor-pointer"
                   required
                 />
               </div>
 
-              {/* ✅ Hora - SELECTOR VISUAL CON OPCIONES */}
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-2">
-                  🕐 Hora *
+              <div className="space-y-2">
+                <label className="block text-sm font-bold text-gray-700 flex items-center gap-2">
+                  <Clock size={16} className="text-unach-blue" />
+                  Hora
                 </label>
-                <select
-                  value={hora}
-                  onChange={(e) => setHora(e.target.value)}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition appearance-none bg-white cursor-pointer"
-                  required
-                >
-                  <option value="">Selecciona la hora</option>
-                  {opcionesHora.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </select>
+                <div className="relative">
+                    <select
+                      value={hora}
+                      onChange={(e) => setHora(e.target.value)}
+                      className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-unach-blue focus:border-transparent focus:bg-white transition-all outline-none appearance-none cursor-pointer text-gray-700"
+                      required
+                    >
+                      <option value="">Seleccionar...</option>
+                      {opcionesHora.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                          </option>
+                      ))}
+                    </select>
+                    {/* Flecha personalizada */}
+                    <div className="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-gray-400">
+                        <svg className="w-4 h-4 fill-current" viewBox="0 0 20 20"><path d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z"/></svg>
+                    </div>
+                </div>
               </div>
             </div>
 
-            {/* Campo: Modalidad */}
-            <div>
-              <label className="block text-sm font-semibold text-gray-700 mb-3">
-                Modalidad *
-              </label>
-              <div className="grid grid-cols-2 gap-3">
+            {/* CAMPO: MODALIDAD (TARJETAS) */}
+            <div className="space-y-2">
+              <label className="block text-sm font-bold text-gray-700">Modalidad Preferida</label>
+              <div className="grid grid-cols-2 gap-4">
                 <button
                   type="button"
                   onClick={() => setModalidad('Presencial')}
-                  className={`p-4 rounded-lg border-2 transition-all text-center ${
-                    modalidad === 'Presencial'
-                      ? 'border-blue-600 bg-blue-50 text-blue-700 font-semibold'
-                      : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400'
-                  }`}
+                  className={`
+                    p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 relative overflow-hidden
+                    ${modalidad === 'Presencial'
+                      ? 'border-unach-blue bg-blue-50/50 text-unach-blue shadow-md'
+                      : 'border-gray-100 bg-white text-gray-400 hover:border-gray-200 hover:bg-gray-50'
+                    }
+                  `}
                 >
-                  <div className="text-2xl mb-1">📍</div>
-                  <span className="text-sm">Presencial</span>
+                  <MapPin size={28} className={modalidad === 'Presencial' ? 'fill-current opacity-20 absolute -right-2 -bottom-2 w-12 h-12' : 'hidden'} />
+                  <MapPin size={24} className={modalidad === 'Presencial' ? 'fill-current' : ''} />
+                  <span className="font-bold text-sm">Presencial</span>
                 </button>
+                
                 <button
                   type="button"
                   onClick={() => setModalidad('Virtual')}
-                  className={`p-4 rounded-lg border-2 transition-all text-center ${
-                    modalidad === 'Virtual'
-                      ? 'border-blue-600 bg-blue-50 text-blue-700 font-semibold'
-                      : 'border-gray-300 bg-white text-gray-600 hover:border-gray-400'
-                  }`}
+                  className={`
+                    p-4 rounded-xl border-2 transition-all flex flex-col items-center gap-2 relative overflow-hidden
+                    ${modalidad === 'Virtual'
+                      ? 'border-unach-blue bg-blue-50/50 text-unach-blue shadow-md'
+                      : 'border-gray-100 bg-white text-gray-400 hover:border-gray-200 hover:bg-gray-50'
+                    }
+                  `}
                 >
-                  <div className="text-2xl mb-1">💻</div>
-                  <span className="text-sm">Virtual</span>
+                  <Video size={28} className={modalidad === 'Virtual' ? 'fill-current opacity-20 absolute -right-2 -bottom-2 w-12 h-12' : 'hidden'} />
+                  <Video size={24} className={modalidad === 'Virtual' ? 'fill-current' : ''} />
+                  <span className="font-bold text-sm">Virtual</span>
                 </button>
               </div>
             </div>
 
-            {/* Información de duración */}
-            <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
-              <p className="text-sm text-gray-600">
-                ⏱️ Duración: <span className="font-semibold">60 minutos</span>
-              </p>
-            </div>
-
-            {/* Mensaje de error */}
+            {/* ERROR MESSAGE */}
             {error && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-sm text-red-700">⚠️ {error}</p>
+              <div className="p-4 bg-red-50 border border-red-100 rounded-xl flex items-start gap-3 animate-pulse">
+                 <div className="text-unach-red mt-0.5"><X size={18} /></div>
+                 <p className="text-sm text-red-700 font-medium">{error}</p>
               </div>
             )}
 
-            {/* Botones de acción */}
-            <div className="flex gap-3 pt-4">
+            {/* FOOTER: BOTONES */}
+            <div className="pt-4 flex gap-4">
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-3 px-4 bg-gray-100 text-gray-700 rounded-lg font-medium hover:bg-gray-200 transition"
+                className="flex-1 py-3.5 px-4 bg-white text-gray-700 font-bold rounded-xl border border-gray-200 hover:bg-gray-50 hover:text-gray-900 transition-colors"
                 disabled={loading}
               >
                 Cancelar
@@ -234,9 +258,18 @@ const AgendarTutoriaModal: React.FC<Props> = ({
               <button
                 type="submit"
                 disabled={loading}
-                className="flex-1 py-3 px-4 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex-1 py-3.5 px-4 bg-unach-blue text-white font-bold rounded-xl hover:bg-blue-800 transition-all shadow-lg hover:shadow-xl disabled:opacity-70 disabled:cursor-not-allowed flex justify-center items-center gap-2 transform hover:-translate-y-0.5"
               >
-                {loading ? 'Agendando...' : 'Solicitar Tutoría'}
+                {loading ? (
+                    <>
+                        <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                        Enviando...
+                    </>
+                ) : (
+                    <>
+                        Confirmar Solicitud <CheckCircle2 size={18} />
+                    </>
+                )}
               </button>
             </div>
           </form>

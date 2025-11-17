@@ -5,23 +5,34 @@ import axiosClient from '../api/axiosClient';
 import { useAuth } from '../context/AuthContext';
 import { actualizarEstadoTutoria } from '../services/tutorDashboardService';
 import EnlaceZoomModal from '../components/EnlaceZoomModal'; 
+import { 
+  Calendar, 
+  Clock, 
+  Check, 
+  X, 
+  Video, 
+  MapPin, 
+  MessageSquare, 
+  CheckCircle2, 
+  AlertCircle,
+  History,
+  Inbox,
+  FileText,
+  Star,
+  ExternalLink // Agregamos este icono para el botón de link
+} from 'lucide-react';
 
-// 1. Define las interfaces que recibimos del endpoint GET /tutorias/
+// --- Interfaces ---
 interface EstudianteDetail {
-    usuario: {
-        nombre: string;
-    };
+    usuario: { nombre: string; };
 }
-
 interface AsignaturaDetail {
     nombre: string;
 }
-
 interface MatriculaDetail {
     estudiante: EstudianteDetail;
     asignatura: AsignaturaDetail;
 }
-
 interface TutoriaTutor {
     id: number;
     fecha: string;
@@ -29,38 +40,15 @@ interface TutoriaTutor {
     tema: string | null;
     modalidad: string;
     estado: 'solicitada' | 'programada' | 'cancelada' | 'realizada' | 'no_asistio';
-    enlace_reunion: string | null; // ✅ AGREGADO
+    enlace_reunion: string | null;
     matricula: MatriculaDetail; 
-    evaluacion: any; // Para verificar si ya fue evaluada
+    evaluacion: any; 
 }
 
-// Función para obtener las tutorías del tutor (ENDPOINT: GET /tutorias/)
+// --- Servicio local ---
 const getMisTutoriasTutor = async (): Promise<TutoriaTutor[]> => {
-    try {
-        const response = await axiosClient.get('/tutorias/');
-        return response.data;
-    } catch (error) {
-        console.error("Error al obtener las tutorías del tutor:", error);
-        throw error;
-    }
-};
-
-// Mapeo de estados para la interfaz de usuario
-const EstadoClases = {
-    solicitada: 'bg-yellow-100 text-yellow-800 border-yellow-600',
-    programada: 'bg-blue-100 text-blue-800 border-blue-600',
-    cancelada: 'bg-red-100 text-red-800 border-red-600',
-    realizada: 'bg-green-100 text-green-800 border-green-600',
-    no_asistio: 'bg-gray-100 text-gray-800 border-gray-600',
-};
-
-// Mapeo para priorizar las solicitudes
-const PrioridadEstado = {
-    solicitada: 1,
-    programada: 2,
-    realizada: 3,
-    no_asistio: 4,
-    cancelada: 5,
+    const response = await axiosClient.get('/tutorias/');
+    return response.data;
 };
 
 const TutoriasTutor: React.FC = () => {
@@ -68,8 +56,9 @@ const TutoriasTutor: React.FC = () => {
     const [tutorias, setTutorias] = useState<TutoriaTutor[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<'pendientes' | 'programadas' | 'historial'>('pendientes');
 
-    // Estados para el modal de Zoom
+    // Modal Zoom
     const [isZoomModalOpen, setIsZoomModalOpen] = useState(false);
     const [tutoriaSeleccionada, setTutoriaSeleccionada] = useState<TutoriaTutor | null>(null);
 
@@ -78,131 +67,343 @@ const TutoriasTutor: React.FC = () => {
         try {
             setLoading(true);
             const data = await getMisTutoriasTutor();
-            // Ordenar: primero las solicitadas, luego las programadas, luego las demás por fecha
-            const sortedData = data.sort((a, b) => {
-                const diff = PrioridadEstado[a.estado] - PrioridadEstado[b.estado];
-                if (diff !== 0) return diff;
-                return new Date(a.fecha).getTime() - new Date(b.fecha).getTime();
-            });
-            setTutorias(sortedData);
+            // Ordenar por fecha más reciente
+            setTutorias(data.sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()));
             setError(null);
         } catch (err) {
-            setError('No se pudo cargar el historial de tutorías asignadas.');
-            console.error("❌ Error en fetchTutorias:", err);
+            setError('No se pudo cargar el historial de tutorías.');
         } finally {
             setLoading(false);
         }
     }, [user]);
 
-    useEffect(() => {
-        fetchTutorias();
-    }, [fetchTutorias]);
+    useEffect(() => { fetchTutorias(); }, [fetchTutorias]);
 
-    // Lógica para ACEPTAR y GESTIONAR EL ENLACE
+    // Handlers
     const handleAceptar = (tutoria: TutoriaTutor) => {
         if (tutoria.modalidad === 'Virtual') {
             setTutoriaSeleccionada(tutoria);
             setIsZoomModalOpen(true);
         } else {
-            // Tutoría presencial: se acepta sin necesidad de enlace
             handleActualizarEstado(tutoria.id, 'programada');
         }
     };
 
-    // Lógica para ACTUALIZAR el estado (Rechazar/Finalizar)
     const handleActualizarEstado = async (tutoriaId: number, estado: 'programada' | 'cancelada' | 'realizada' | 'no_asistio', enlace: string | null = null) => {
-        const action = {
-            programada: 'Aceptar',
-            cancelada: 'Rechazar',
-            realizada: 'Finalizar (Asistió)',
-            no_asistio: 'Finalizar (No Asistió)',
-        }[estado];
-        
-        if (!window.confirm(`¿Estás seguro de que quieres ${action} la tutoría ID ${tutoriaId}?`)) return;
-
+        if (!window.confirm(`¿Confirmar acción sobre la tutoría?`)) return;
         try {
-            await actualizarEstadoTutoria(tutoriaId, estado, enlace); // ✅ Ahora enviamos el enlace
-            alert(`Tutoría ${action.toLowerCase()} con éxito.`);
-            fetchTutorias(); // Refresca la lista
+            await actualizarEstadoTutoria(tutoriaId, estado, enlace);
+            fetchTutorias();
         } catch (err) {
-            alert(`Error al ${action.toLowerCase()} la tutoría. Asegúrate de tener permisos y completar todos los campos.`);
+            alert('Error al actualizar la tutoría.');
         }
     };
     
-    // Función de callback del modal de Zoom
     const handleZoomAceptar = (tutoriaId: number, enlace: string) => {
         handleActualizarEstado(tutoriaId, 'programada', enlace);
         setIsZoomModalOpen(false);
         setTutoriaSeleccionada(null);
     };
 
-    if (loading) return <div className="text-center p-12">Cargando gestión de tutorías...</div>;
-    if (error) return <div className="text-center text-red-500 p-12">{error}</div>;
-
-    if (tutorias.length === 0) {
-        return (
-            <div className="p-8 bg-white rounded-lg shadow-md">
-                <h1 className="text-3xl font-bold text-gray-800 mb-4">Gestión de Tutorías</h1>
-                <p className="text-gray-600">No tienes tutorías asignadas en este momento.</p>
-            </div>
-        );
-    }
-    
+    // Filtrado de datos
     const pendientes = tutorias.filter(t => t.estado === 'solicitada');
     const programadas = tutorias.filter(t => t.estado === 'programada');
-    const historial = tutorias.filter(t => t.estado !== 'solicitada' && t.estado !== 'programada');
+    const historial = tutorias.filter(t => ['realizada', 'no_asistio', 'cancelada'].includes(t.estado)).sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()); 
 
+    // Definición de estilos de estado para el historial
+    const estadoConfig: Record<string, { color: string; label: string }> = {
+        solicitada: { color: 'bg-amber-100 text-amber-700 border-amber-200', label: 'Por Aprobar' },
+        programada: { color: 'bg-blue-100 text-blue-700 border-blue-200', label: 'Programada' },
+        cancelada: { color: 'bg-rose-100 text-rose-700 border-rose-200', label: 'Rechazada' },
+        realizada: { color: 'bg-emerald-100 text-emerald-700 border-emerald-200', label: 'Finalizada' },
+        no_asistio: { color: 'bg-gray-100 text-gray-600 border-gray-200', label: 'No Asistió' },
+    };
+
+    if (loading) return (
+        <div className="flex flex-col items-center justify-center h-96 text-unach-blue animate-pulse">
+          <FileText size={48} strokeWidth={1} />
+          <p className="mt-4 font-medium text-sm tracking-wide">CARGANDO GESTIÓN...</p>
+        </div>
+    );
+
+    if (error) return <div className="text-center text-unach-red p-12 font-bold border border-red-100 bg-red-50 rounded-xl">{error}</div>;
 
     return (
-        <div className="space-y-10">
-            <h1 className="text-3xl font-bold text-gray-800">Gestión de Tutorías Asignadas</h1>
-
-            {/* SECCIÓN SOLICITUDES PENDIENTES */}
-            <div className="bg-white p-6 rounded-lg shadow-xl border-t-4 border-yellow-500">
-                <h2 className="text-2xl font-bold text-gray-800 mb-4">Solicitudes Pendientes ({pendientes.length})</h2>
-                {pendientes.length === 0 ? (
-                    <p className="text-gray-600">No hay nuevas solicitudes de tutoría.</p>
-                ) : (
-                    <TablaTutorias 
-                        tutorias={pendientes} 
-                        handleAceptar={handleAceptar}
-                        handleActualizarEstado={handleActualizarEstado} 
-                        tipoAccion="solicitud"
-                    />
-                )}
+        <div className="space-y-8 pb-12 animate-in fade-in duration-500">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-gray-200 pb-6">
+                <div>
+                    <h1 className="text-3xl font-extrabold text-unach-blue flex items-center gap-3">
+                        Gestión de Tutorías <span className="text-2xl">📋</span>
+                    </h1>
+                    <p className="text-gray-500 mt-1 ml-1 text-sm">Administra solicitudes y sesiones académicas.</p>
+                </div>
             </div>
 
-            {/* SECCIÓN PROGRAMADAS Y ACTIVAS */}
-            <div className="bg-white p-6 rounded-lg shadow-xl border-t-4 border-blue-500">
-                <h2 className="text-2xl font-bold text-gray-800 mb-4">Tutorías Programadas ({programadas.length})</h2>
-                {programadas.length === 0 ? (
-                    <p className="text-gray-600">No hay tutorías programadas activas.</p>
-                ) : (
-                    <TablaTutorias 
-                        tutorias={programadas} 
-                        handleAceptar={handleAceptar}
-                        handleActualizarEstado={handleActualizarEstado} 
-                        tipoAccion="finalizar"
-                    />
-                )}
+            {/* NAVEGACIÓN DE PESTAÑAS (Tabs) */}
+            <div className="flex gap-2 bg-gray-100/50 p-1 rounded-xl w-fit">
+                <button
+                    onClick={() => setActiveTab('pendientes')}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${
+                        activeTab === 'pendientes' 
+                            ? 'bg-white text-unach-blue shadow-md ring-1 ring-black/5' 
+                            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                    }`}
+                >
+                    <Inbox size={18} />
+                    Pendientes
+                    {pendientes.length > 0 && (
+                        <span className="ml-1 px-2 py-0.5 bg-unach-red text-white text-[10px] rounded-full">
+                            {pendientes.length}
+                        </span>
+                    )}
+                </button>
+                <button
+                    onClick={() => setActiveTab('programadas')}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${
+                        activeTab === 'programadas' 
+                            ? 'bg-white text-unach-blue shadow-md ring-1 ring-black/5' 
+                            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                    }`}
+                >
+                    <Calendar size={18} />
+                    Programadas
+                    {programadas.length > 0 && (
+                        <span className="ml-1 px-2 py-0.5 bg-blue-500 text-white text-[10px] rounded-full">
+                            {programadas.length}
+                        </span>
+                    )}
+                </button>
+                <button
+                    onClick={() => setActiveTab('historial')}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-lg text-sm font-bold transition-all ${
+                        activeTab === 'historial' 
+                            ? 'bg-white text-unach-blue shadow-md ring-1 ring-black/5' 
+                            : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                    }`}
+                >
+                    <History size={18} />
+                    Historial
+                </button>
             </div>
 
-            {/* SECCIÓN HISTORIAL */}
-            <div className="bg-white p-6 rounded-lg shadow-md">
-                <h2 className="text-2xl font-bold text-gray-800 mb-4">Historial Finalizado ({historial.length})</h2>
-                 {historial.length === 0 ? (
-                    <p className="text-gray-600">No hay tutorías finalizadas o canceladas.</p>
-                ) : (
-                    <TablaTutorias 
-                        tutorias={historial} 
-                        handleAceptar={handleAceptar}
-                        handleActualizarEstado={handleActualizarEstado} 
-                        tipoAccion="historial"
-                    />
-                )}
-            </div>
+            {/* CONTENIDO DE PESTAÑAS */}
+            
+            {/* 1. PESTAÑA PENDIENTES */}
+            {activeTab === 'pendientes' && (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in slide-in-from-bottom-4 duration-300">
+                    {pendientes.length === 0 ? (
+                        <div className="col-span-full text-center py-16 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+                            <CheckCircle2 size={48} className="mx-auto text-gray-300 mb-3" />
+                            <p className="text-gray-500 font-medium">¡Todo al día! No tienes solicitudes pendientes.</p>
+                        </div>
+                    ) : (
+                        pendientes.map((t) => (
+                            <div key={t.id} className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 flex flex-col justify-between group hover:border-blue-200 transition-colors">
+                                <div>
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div className="p-3 bg-amber-50 text-amber-600 rounded-lg">
+                                            <AlertCircle size={24} />
+                                        </div>
+                                        <span className="text-[10px] font-bold uppercase bg-gray-100 text-gray-600 px-2 py-1 rounded">
+                                            Solicitud #{t.id}
+                                        </span>
+                                    </div>
+                                    <h3 className="font-bold text-gray-800 text-lg leading-tight mb-1">
+                                        {t.matricula.estudiante.usuario.nombre}
+                                    </h3>
+                                    <p className="text-xs text-gray-500 font-medium mb-4">{t.matricula.asignatura.nombre}</p>
+                                    
+                                    <div className="space-y-2 mb-6">
+                                        <p className="text-sm text-gray-600 flex items-center gap-2">
+                                            <MessageSquare size={16} className="text-unach-blue" /> 
+                                            <span className="italic">"{t.tema}"</span>
+                                        </p>
+                                        <p className="text-sm text-gray-600 flex items-center gap-2">
+                                            <Calendar size={16} className="text-unach-blue" /> 
+                                            {new Date(t.fecha).toLocaleString()}
+                                        </p>
+                                        <p className="text-sm text-gray-600 flex items-center gap-2">
+                                            {t.modalidad === 'Virtual' ? <Video size={16} className="text-purple-500" /> : <MapPin size={16} className="text-orange-500" />}
+                                            <span className="font-semibold">{t.modalidad}</span>
+                                        </p>
+                                    </div>
+                                </div>
 
-            {/* Modal de Zoom */}
+                                <div className="grid grid-cols-2 gap-3 mt-auto">
+                                    <button 
+                                        onClick={() => handleActualizarEstado(t.id, 'cancelada')}
+                                        className="flex items-center justify-center gap-2 py-2.5 rounded-lg border border-rose-200 text-rose-600 font-bold text-xs hover:bg-rose-50 transition-colors"
+                                    >
+                                        <X size={16} /> Rechazar
+                                    </button>
+                                    <button 
+                                        onClick={() => handleAceptar(t)}
+                                        className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-unach-blue text-white font-bold text-xs hover:bg-blue-800 shadow-md hover:shadow-lg transition-all"
+                                    >
+                                        <Check size={16} /> Aceptar
+                                    </button>
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            )}
+
+            {/* 2. PESTAÑA PROGRAMADAS (Con Botón de Link Mejorado) */}
+            {activeTab === 'programadas' && (
+                <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200 animate-in slide-in-from-bottom-4 duration-300">
+                    {programadas.length === 0 ? (
+                        <div className="text-center py-16">
+                            <Calendar size={48} className="mx-auto text-gray-300 mb-3" />
+                            <p className="text-gray-500 font-medium">No tienes sesiones programadas próximamente.</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-100">
+                            <thead className="bg-gray-50 text-gray-500">
+                                <tr>
+                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Estudiante</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Fecha y Hora</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Tema</th>
+                                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider">Modalidad</th>
+                                    <th className="px-6 py-4 text-right text-xs font-bold uppercase tracking-wider">Finalizar</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-50">
+                                {programadas.map((t) => (
+                                    <tr key={t.id} className="hover:bg-blue-50/30 transition-colors">
+                                        <td className="px-6 py-4">
+                                            <div className="flex flex-col">
+                                                <span className="font-bold text-gray-800 text-sm">{t.matricula.estudiante.usuario.nombre}</span>
+                                                <span className="text-xs text-gray-400">{t.matricula.asignatura.nombre}</span>
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 text-sm text-gray-600">
+                                            <div className="flex items-center gap-2">
+                                                <Clock size={14} className="text-unach-blue" />
+                                                {new Date(t.fecha).toLocaleString()}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 text-sm text-gray-600 max-w-xs truncate" title={t.tema || ''}>
+                                            {t.tema}
+                                        </td>
+                                        
+                                        {/* COLUMNA MODALIDAD (REDISEÑADA) */}
+                                        <td className="px-6 py-4 text-center align-middle">
+                                            <div className="flex flex-col items-center gap-2">
+                                                {/* Badge de Modalidad */}
+                                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold ${
+                                                    t.modalidad === 'Virtual' 
+                                                        ? 'bg-purple-50 text-purple-700 border border-purple-100' 
+                                                        : 'bg-orange-50 text-orange-700 border border-orange-100'
+                                                }`}>
+                                                    {t.modalidad === 'Virtual' ? <Video size={12} /> : <MapPin size={12} />}
+                                                    {t.modalidad}
+                                                </span>
+
+                                                {/* Botón de Enlace (Solo si es virtual) */}
+                                                {t.modalidad === 'Virtual' && t.enlace_reunion && (
+                                                    <a 
+                                                        href={t.enlace_reunion} 
+                                                        target="_blank" 
+                                                        rel="noopener noreferrer" 
+                                                        className="inline-flex items-center gap-1.5 px-2 py-1 bg-white border border-blue-200 rounded-md text-[10px] font-bold text-unach-blue hover:bg-blue-50 hover:border-blue-300 transition-all shadow-sm group"
+                                                        title="Abrir sala de reunión"
+                                                    >
+                                                        <ExternalLink size={10} className="group-hover:scale-110 transition-transform" /> 
+                                                        Abrir Sala
+                                                    </a>
+                                                )}
+                                            </div>
+                                        </td>
+
+                                        <td className="px-6 py-4 text-right">
+                                            <div className="flex justify-end gap-2">
+                                                <button 
+                                                    onClick={() => handleActualizarEstado(t.id, 'no_asistio')}
+                                                    title="Marcar como No Asistió"
+                                                    className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-700 transition-colors"
+                                                >
+                                                    <X size={18} />
+                                                </button>
+                                                <button 
+                                                    onClick={() => handleActualizarEstado(t.id, 'realizada')}
+                                                    title="Finalizar con Éxito"
+                                                    className="flex items-center gap-2 px-3 py-2 rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm hover:shadow transition-all text-xs font-bold"
+                                                >
+                                                    <CheckCircle2 size={16} /> Concluir
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* 3. PESTAÑA HISTORIAL */}
+            {activeTab === 'historial' && (
+                <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200 animate-in slide-in-from-bottom-4 duration-300">
+                    {historial.length === 0 ? (
+                         <div className="text-center py-16">
+                            <History size={48} className="mx-auto text-gray-300 mb-3" />
+                            <p className="text-gray-500 font-medium">No hay historial registrado.</p>
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-100">
+                            <thead className="bg-gray-50 text-gray-500">
+                                <tr>
+                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Fecha</th>
+                                    <th className="px-6 py-4 text-left text-xs font-bold uppercase tracking-wider">Estudiante</th>
+                                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider">Estado</th>
+                                    <th className="px-6 py-4 text-center text-xs font-bold uppercase tracking-wider">Evaluación</th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-50">
+                                {historial.map((t) => {
+                                    const config = estadoConfig[t.estado] || estadoConfig.no_asistio;
+                                    return (
+                                        <tr key={t.id} className="hover:bg-gray-50 transition-colors">
+                                            <td className="px-6 py-4 text-sm text-gray-600">
+                                                {new Date(t.fecha).toLocaleDateString()}
+                                            </td>
+                                            <td className="px-6 py-4">
+                                                <div className="flex flex-col">
+                                                    <span className="font-bold text-gray-700 text-sm">{t.matricula.estudiante.usuario.nombre}</span>
+                                                    <span className="text-xs text-gray-400">{t.matricula.asignatura.nombre}</span>
+                                                </div>
+                                            </td>
+                                            <td className="px-6 py-4 text-center">
+                                                <span className={`inline-block px-3 py-1 text-[10px] font-bold rounded-full border ${config.color}`}>
+                                                    {config.label}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 text-center">
+                                                {t.evaluacion ? (
+                                                    <div className="flex justify-center items-center gap-1 text-yellow-500" title={t.evaluacion.comentario_estudiante}>
+                                                        <span className="font-bold text-sm text-gray-700">{t.evaluacion.estrellas}</span>
+                                                        <Star size={14} className="fill-yellow-500" />
+                                                    </div>
+                                                ) : (
+                                                    <span className="text-xs text-gray-300 italic">--</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Modal Zoom */}
             {tutoriaSeleccionada && (
                 <EnlaceZoomModal
                     isOpen={isZoomModalOpen}
@@ -214,132 +415,5 @@ const TutoriasTutor: React.FC = () => {
         </div>
     );
 };
-
-// Sub-Componente de la Tabla
-interface TablaProps {
-    tutorias: TutoriaTutor[];
-    handleAceptar: (tutoria: TutoriaTutor) => void;
-    handleActualizarEstado: (tutoriaId: number, estado: 'programada' | 'cancelada' | 'realizada' | 'no_asistio', enlace?: string | null) => void;
-    tipoAccion: 'solicitud' | 'finalizar' | 'historial';
-}
-
-const renderEstrellas = (estrellas: number) => {
-    const starColor = 'text-yellow-500';
-    const emptyColor = 'text-gray-300';
-    
-    return (
-        <div className="flex text-lg">
-            {[1, 2, 3, 4, 5].map(i => (
-                <span key={i} className={i <= estrellas ? starColor : emptyColor}>
-                    ★
-                </span>
-            ))}
-        </div>
-    );
-};
-
-
-const TablaTutorias: React.FC<TablaProps> = ({ tutorias, handleAceptar, handleActualizarEstado, tipoAccion }) => {
-    return (
-        <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-                <thead className="bg-gray-50">
-                    <tr>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estudiante</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Asignatura</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha y Hora</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Modalidad</th>
-                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
-                        {/* ✅ NUEVA COLUMNA DE EVALUACIÓN */}
-                        {(tipoAccion === 'historial' || tipoAccion === 'finalizar') && 
-                            <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Evaluación</th>
-                        }
-                        {tipoAccion !== 'historial' && <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>}
-                    </tr>
-                </thead>
-                <tbody className="bg-white divide-y divide-gray-200">
-                    {tutorias.map((tutoria) => (
-                        <tr key={tutoria.id}>
-                            <td className="px-6 py-4 whitespace-nowrap font-medium text-gray-900">
-                                {tutoria.matricula.estudiante.usuario.nombre}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-gray-700">
-                                {tutoria.matricula.asignatura.nombre}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-gray-700">
-                                {new Date(tutoria.fecha).toLocaleString()}
-                            </td>
-                            <td className="px-6 py-4 whitespace-nowrap text-gray-700">{tutoria.modalidad}</td>
-                            <td className="px-6 py-4 whitespace-nowrap">
-                                <span className={`px-3 py-1 text-xs font-semibold rounded-full border ${EstadoClases[tutoria.estado]}`}>
-                                    {tutoria.estado.toUpperCase().replace('_', ' ')}
-                                </span>
-                                {tutoria.estado === 'programada' && tutoria.enlace_reunion && (
-                                    <a 
-                                        href={tutoria.enlace_reunion} 
-                                        target="_blank" 
-                                        rel="noopener noreferrer" 
-                                        className="block mt-1 text-xs text-blue-600 hover:text-blue-800 underline"
-                                    >
-                                        🔗 Enlace Reunión
-                                    </a>
-                                )}
-                            </td>
-                            {/* ✅ CELDA DE EVALUACIÓN */}
-                            {(tipoAccion === 'historial' || tipoAccion === 'finalizar') && (
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    {tutoria.evaluacion ? (
-                                        <div title={tutoria.evaluacion.comentario_estudiante || ''}>
-                                            {renderEstrellas(tutoria.evaluacion.estrellas)}
-                                        </div>
-                                    ) : (
-                                        <span className="text-xs text-gray-500">Pendiente Eval.</span>
-                                    )}
-                                </td>
-                            )}
-                            {/* CELDA DE ACCIONES */}
-                            {tipoAccion === 'solicitud' && (
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="flex gap-2">
-                                        <button 
-                                            onClick={() => handleAceptar(tutoria)} 
-                                            className="bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 text-sm transition-colors"
-                                        >
-                                            Aceptar
-                                        </button>
-                                        <button 
-                                            onClick={() => handleActualizarEstado(tutoria.id, 'cancelada')} 
-                                            className="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 text-sm transition-colors"
-                                        >
-                                            Rechazar
-                                        </button>
-                                    </div>
-                                </td>
-                            )}
-                            {tipoAccion === 'finalizar' && (
-                                <td className="px-6 py-4 whitespace-nowrap">
-                                    <div className="flex flex-col gap-1">
-                                        <button 
-                                            onClick={() => handleActualizarEstado(tutoria.id, 'realizada')} 
-                                            className="bg-purple-600 text-white px-3 py-1 rounded hover:bg-purple-700 text-xs transition-colors"
-                                        >
-                                            Marcar Realizada
-                                        </button>
-                                        <button 
-                                            onClick={() => handleActualizarEstado(tutoria.id, 'no_asistio')} 
-                                            className="bg-gray-500 text-white px-3 py-1 rounded hover:bg-gray-600 text-xs transition-colors"
-                                        >
-                                            Marcar No Asistió
-                                        </button>
-                                    </div>
-                                </td>
-                            )}
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-    );
-}
 
 export default TutoriasTutor;
