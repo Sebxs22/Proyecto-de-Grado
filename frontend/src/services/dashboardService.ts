@@ -9,8 +9,9 @@ interface KpiData {
 }
 
 // ✅ INTERFAZ ACTUALIZADA
-interface HistorialAcademico {
+export interface HistorialAcademico {
     asignatura: string;
+    periodo: string;
     parcial1: number | null;
     parcial2: number | null;
     final: number | null;
@@ -30,6 +31,7 @@ interface HistorialAcademico {
 
 export interface StudentDashboard {
     nombre: string;
+    codigo: string;
     kpis: KpiData;
     historial_academico: HistorialAcademico[];
 }

@@ -71,6 +71,7 @@ def get_student_kpis(db: Session, estudiante_id: int) -> Dict[str, Any]:
     """
     query_historial = text("""
         SELECT 
+            pa.nombre AS periodo,  -- <--- 1. NUEVO CAMPO
             a.nombre AS asignatura,
             t_u.nombre AS tutor_nombre,
             n.parcial1,
@@ -82,6 +83,7 @@ def get_student_kpis(db: Session, estudiante_id: int) -> Dict[str, Any]:
             m.estudiante_id,
             (COALESCE(n.parcial1, 0) + COALESCE(n.parcial2, 0)) / 2 AS promedio_parciales
         FROM tutorias_unach.matriculas m
+        JOIN tutorias_unach.periodos_academicos pa ON m.periodo_id = pa.id -- <--- 2. NUEVO JOIN
         JOIN tutorias_unach.asignaturas a ON m.asignatura_id = a.id
         LEFT JOIN tutorias_unach.notas n ON m.id = n.matricula_id
         LEFT JOIN tutorias_unach.tutores t ON m.tutor_id = t.id
@@ -90,17 +92,21 @@ def get_student_kpis(db: Session, estudiante_id: int) -> Dict[str, Any]:
         ORDER BY m.periodo_id DESC, a.nombre;
     """)
     
+    # ... (El resto de la función sigue igual) ...
+    # Solo asegúrate de que la lógica de predicción y retorno se mantenga.
+    # No necesitas cambiar nada más abajo, el diccionario 'materia_dict'
+    # incluirá automáticamente 'periodo' gracias al SELECT.
+
     historial_result = db.execute(query_historial, {"estudiante_id": estudiante_id}).mappings().all()
     
     historial_detallado = []
     suma_finales, total_finales = 0, 0
-    
-    # ✅ SOLUCIÓN: Flag para controlar que solo se cree UNA tutoría
     tutoria_creada_en_esta_ejecucion = False
     
     for materia in historial_result:
         materia_dict = dict(materia)
         
+        # ... (MANTENER LÓGICA DE RIESGO Y TUTORÍA PROACTIVA IGUAL QUE ANTES) ...
         if materia_dict.get('situacion') not in ['APROBADO', 'REPROBADO']:
             risk_data = prediction_service.predict_risk(
                 db=db, 
@@ -111,10 +117,9 @@ def get_student_kpis(db: Session, estudiante_id: int) -> Dict[str, Any]:
             
             riesgo_detectado = risk_data.get('riesgo_nivel')
             
-            # ✅ SOLUCIÓN: Solo crear si NO se ha creado una en este request
             if riesgo_detectado in ['ALTO', 'MEDIO'] and not tutoria_creada_en_esta_ejecucion:
                 resultado = _crear_tutoria_proactiva(db, materia_dict, riesgo_detectado)
-                if resultado:  # Si se creó la tutoría
+                if resultado:
                     tutoria_creada_en_esta_ejecucion = True
         else:
             if materia_dict.get('situacion') == 'REPROBADO':

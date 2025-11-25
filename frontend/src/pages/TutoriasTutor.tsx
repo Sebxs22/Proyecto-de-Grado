@@ -19,7 +19,9 @@ import {
   Inbox,
   FileText,
   Star,
-  ExternalLink // Agregamos este icono para el botón de link
+  ExternalLink,
+  ChevronLeft, 
+  ChevronRight
 } from 'lucide-react';
 
 // --- Interfaces ---
@@ -58,6 +60,10 @@ const TutoriasTutor: React.FC = () => {
     const [error, setError] = useState<string | null>(null);
     const [activeTab, setActiveTab] = useState<'pendientes' | 'programadas' | 'historial'>('pendientes');
 
+    // Paginación
+    const [currentPage, setCurrentPage] = useState(1);
+    const itemsPerPage = 9; 
+
     // Modal Zoom
     const [isZoomModalOpen, setIsZoomModalOpen] = useState(false);
     const [tutoriaSeleccionada, setTutoriaSeleccionada] = useState<TutoriaTutor | null>(null);
@@ -67,7 +73,6 @@ const TutoriasTutor: React.FC = () => {
         try {
             setLoading(true);
             const data = await getMisTutoriasTutor();
-            // Ordenar por fecha más reciente
             setTutorias(data.sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime()));
             setError(null);
         } catch (err) {
@@ -78,6 +83,11 @@ const TutoriasTutor: React.FC = () => {
     }, [user]);
 
     useEffect(() => { fetchTutorias(); }, [fetchTutorias]);
+
+    // Resetear página al cambiar de pestaña
+    useEffect(() => {
+        setCurrentPage(1);
+    }, [activeTab]);
 
     // Handlers
     const handleAceptar = (tutoria: TutoriaTutor) => {
@@ -105,12 +115,24 @@ const TutoriasTutor: React.FC = () => {
         setTutoriaSeleccionada(null);
     };
 
-    // Filtrado de datos
+    // Filtrado de datos GENERAL
     const pendientes = tutorias.filter(t => t.estado === 'solicitada');
     const programadas = tutorias.filter(t => t.estado === 'programada');
     const historial = tutorias.filter(t => ['realizada', 'no_asistio', 'cancelada'].includes(t.estado)).sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime()); 
 
-    // Definición de estilos de estado para el historial
+    // --- LÓGICA DE PAGINACIÓN ---
+    let currentDataList: TutoriaTutor[] = [];
+    if (activeTab === 'pendientes') currentDataList = pendientes;
+    else if (activeTab === 'programadas') currentDataList = programadas;
+    else currentDataList = historial;
+
+    const indexOfLastItem = currentPage * itemsPerPage;
+    const indexOfFirstItem = indexOfLastItem - itemsPerPage;
+    // ✅ CORRECCIÓN: Esta es la lista que debemos usar en los .map() de abajo
+    const currentItems = currentDataList.slice(indexOfFirstItem, indexOfLastItem);
+    const totalPages = Math.ceil(currentDataList.length / itemsPerPage);
+
+    // Estilos de estado
     const estadoConfig: Record<string, { color: string; label: string }> = {
         solicitada: { color: 'bg-amber-100 text-amber-700 border-amber-200', label: 'Por Aprobar' },
         programada: { color: 'bg-blue-100 text-blue-700 border-blue-200', label: 'Programada' },
@@ -198,7 +220,8 @@ const TutoriasTutor: React.FC = () => {
                             <p className="text-gray-500 font-medium">¡Todo al día! No tienes solicitudes pendientes.</p>
                         </div>
                     ) : (
-                        pendientes.map((t) => (
+                        // ✅ CORRECCIÓN: Usamos currentItems
+                        currentItems.map((t) => (
                             <div key={t.id} className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 flex flex-col justify-between group hover:border-blue-200 transition-colors">
                                 <div>
                                     <div className="flex justify-between items-start mb-4">
@@ -250,7 +273,7 @@ const TutoriasTutor: React.FC = () => {
                 </div>
             )}
 
-            {/* 2. PESTAÑA PROGRAMADAS (Con Botón de Link Mejorado) */}
+            {/* 2. PESTAÑA PROGRAMADAS */}
             {activeTab === 'programadas' && (
                 <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200 animate-in slide-in-from-bottom-4 duration-300">
                     {programadas.length === 0 ? (
@@ -271,7 +294,8 @@ const TutoriasTutor: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-50">
-                                {programadas.map((t) => (
+                                {/* ✅ CORRECCIÓN: Usamos currentItems */}
+                                {currentItems.map((t) => (
                                     <tr key={t.id} className="hover:bg-blue-50/30 transition-colors">
                                         <td className="px-6 py-4">
                                             <div className="flex flex-col">
@@ -289,10 +313,8 @@ const TutoriasTutor: React.FC = () => {
                                             {t.tema}
                                         </td>
                                         
-                                        {/* COLUMNA MODALIDAD (REDISEÑADA) */}
                                         <td className="px-6 py-4 text-center align-middle">
                                             <div className="flex flex-col items-center gap-2">
-                                                {/* Badge de Modalidad */}
                                                 <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-bold ${
                                                     t.modalidad === 'Virtual' 
                                                         ? 'bg-purple-50 text-purple-700 border border-purple-100' 
@@ -302,7 +324,6 @@ const TutoriasTutor: React.FC = () => {
                                                     {t.modalidad}
                                                 </span>
 
-                                                {/* Botón de Enlace (Solo si es virtual) */}
                                                 {t.modalidad === 'Virtual' && t.enlace_reunion && (
                                                     <a 
                                                         href={t.enlace_reunion} 
@@ -365,7 +386,8 @@ const TutoriasTutor: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-50">
-                                {historial.map((t) => {
+                                {/* ✅ CORRECCIÓN: Usamos currentItems */}
+                                {currentItems.map((t) => {
                                     const config = estadoConfig[t.estado] || estadoConfig.no_asistio;
                                     return (
                                         <tr key={t.id} className="hover:bg-gray-50 transition-colors">
@@ -400,6 +422,34 @@ const TutoriasTutor: React.FC = () => {
                         </table>
                         </div>
                     )}
+                </div>
+            )}
+
+            {/* FOOTER DE PAGINACIÓN (Común para todas las pestañas) */}
+            {currentDataList.length > 0 && (
+                <div className="flex justify-between items-center p-4 bg-gray-50/50 rounded-xl border border-gray-200">
+                    <div className="text-xs text-gray-500 font-medium">
+                        Mostrando {indexOfFirstItem + 1} - {Math.min(indexOfLastItem, currentDataList.length)} de {currentDataList.length}
+                    </div>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                            disabled={currentPage === 1}
+                            className="p-2 bg-white border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+                        >
+                            <ChevronLeft size={16} />
+                        </button>
+                        <span className="px-4 py-2 bg-white border border-gray-300 rounded-lg text-sm font-bold text-unach-blue">
+                            {currentPage}
+                        </span>
+                        <button
+                            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                            disabled={currentPage === totalPages}
+                            className="p-2 bg-white border border-gray-300 rounded-lg text-gray-600 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+                        >
+                            <ChevronRight size={16} />
+                        </button>
+                    </div>
                 </div>
             )}
 

@@ -17,6 +17,18 @@ import {
   ChevronUp
 } from 'lucide-react';
 
+// Función Helper para formatear nombre
+const formatName = (fullName: string) => {
+    if (!fullName) return "Tutor";
+    const parts = fullName.split(' ').filter(Boolean);
+    if (parts.length >= 3) {
+        const name = parts[0].charAt(0).toUpperCase() + parts[0].slice(1).toLowerCase();
+        const surname = parts[2].charAt(0).toUpperCase() + parts[2].slice(1).toLowerCase();
+        return `${name} ${surname}`;
+    }
+    return parts[0].charAt(0).toUpperCase() + parts[0].slice(1).toLowerCase(); // Fallback
+};
+
 // Función auxiliar para parseo seguro
 const safeParseFloat = (value: number | null | undefined): number => {
     if (value === null || value === undefined) return 0;
@@ -123,7 +135,8 @@ const DashboardTutor: React.FC = () => {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-gray-200 pb-6">
           <div>
               <h1 className="text-3xl font-extrabold text-unach-blue flex items-center gap-3">
-                  Hola, Tutor {nombre.split(' ')[0]} <span className="text-2xl">👨‍🏫</span>
+                  {/* AQUI APLICAMOS EL FORMATO */}
+                  Hola, Tutor {formatName(nombre)} <span className="text-2xl">👨‍🏫</span>
               </h1>
               <p className="text-gray-500 mt-1 ml-1 flex items-center gap-2 text-sm">
                   <School size={16} /> Gestión Académica y Tutorial

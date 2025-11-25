@@ -8,6 +8,7 @@ interface CursoTutor {
   periodo: string;
   asignatura: string;
   estudiante_id: number;
+  codigo_estudiante: string;
   estudiante_nombre: string;
   parcial1: number | null;
   parcial2: number | null;

@@ -12,6 +12,7 @@ from app.services.cmi_service import cmi_service
 # ✅ CORREGIDO: Importar el servicio centralizado de perfiles
 from app.services.profile_service import get_student_id_by_user_email, get_tutor_id_by_user_email 
 from app.models.user import Usuario as UserModel
+from app.models.estudiante import Estudiante # <--- 1. IMPORTAR ESTO
 
 router = APIRouter()
 
@@ -35,6 +36,11 @@ def get_student_dashboard(db: Session = Depends(get_db), current_user: UserModel
             status_code=status.HTTP_404_NOT_FOUND, 
             detail="Perfil de estudiante no encontrado."
         )
+    
+    # --- 2. AGREGAR ESTE BLOQUE PARA OBTENER EL CÓDIGO ---
+    estudiante_obj = db.query(Estudiante).filter(Estudiante.id == estudiante_id).first()
+    codigo_est = estudiante_obj.codigo_estudiante if estudiante_obj else "S/N"
+    # -
 
     dashboard_data = dashboard_service.get_student_kpis(db, estudiante_id)
 
