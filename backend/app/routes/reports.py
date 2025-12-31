@@ -18,8 +18,6 @@ def get_detailed_coordinator_report(
 ):
     """
     Endpoint para el Coordinador.
-    Retorna un reporte detallado de tutorías, agrupado por
-    periodo, tutor y asignatura, con KPIs.
     """
     if current_user.rol != "coordinador":
         raise HTTPException(
@@ -30,3 +28,14 @@ def get_detailed_coordinator_report(
     report_data = report_service.get_coordinator_report(db)
     
     return report_data
+
+# ✅ NUEVO ENDPOINT: Calidad de Datos
+@router.get("/data-quality", tags=["Reports"])
+def get_data_quality_report(
+    db: Session = Depends(get_db),
+    current_user: UserModel = Depends(get_current_user)
+):
+    if current_user.rol != "coordinador":
+        raise HTTPException(status_code=403, detail="Requiere rol de coordinador")
+    
+    return report_service.get_data_quality_metrics(db)

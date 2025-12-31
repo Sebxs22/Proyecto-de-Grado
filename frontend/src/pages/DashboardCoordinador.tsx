@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { getCoordinatorDashboard, CoordinatorDashboard } from '../services/cmiService';
+import axiosClient from '../api/axiosClient'; 
 import { 
   PieChart, 
   Pie, 
@@ -19,7 +20,9 @@ import {
   Briefcase,
   Activity,
   CalendarRange,
-  TrendingUp // <--- ✅ AGREGADO AQUÍ
+  TrendingUp,
+  ShieldCheck,
+  BookOpen // Icono para aprendizaje
 } from 'lucide-react';
 
 // Colores Institucionales para los gráficos
@@ -27,14 +30,27 @@ const COLORS = ['#002F6C', '#E31B23', '#10B981', '#F59E0B', '#6B7280'];
 
 const DashboardCoordinador: React.FC = () => {
   const [dashboardData, setDashboardData] = useState<CoordinatorDashboard | null>(null);
+  // Estado para datos de calidad (ISO/IEC 25012)
+  const [calidadData, setCalidadData] = useState<any>(null); 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchCmiData = useCallback(async () => {
+  const fetchData = useCallback(async () => {
     try {
       setLoading(true);
+      
+      // 1. Carga de datos CMI originales
       const data = await getCoordinatorDashboard();
       setDashboardData(data);
+
+      // 2. Carga datos de Calidad ISO/IEC 25012
+      try {
+        const resCalidad = await axiosClient.get('/reports/data-quality');
+        setCalidadData(resCalidad.data);
+      } catch (err) {
+        console.warn("No se pudo cargar calidad de datos, continuando...", err);
+      }
+
       setError(null);
     } catch (err: any) {
       console.error('❌ Error CMI:', err);
@@ -44,7 +60,7 @@ const DashboardCoordinador: React.FC = () => {
     }
   }, []);
 
-  useEffect(() => { fetchCmiData(); }, [fetchCmiData]);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-96 text-unach-blue animate-pulse">
@@ -84,7 +100,49 @@ const DashboardCoordinador: React.FC = () => {
           </div>
       </div>
 
-      {/* 2. PERSPECTIVA ESTUDIANTE (KPIs) */}
+      {/* 2. KPI DE CALIDAD DE DATOS (ISO/IEC 25012) */}
+      {calidadData && (
+        <div className="bg-gradient-to-r from-indigo-50 to-white p-6 rounded-xl shadow-sm border-l-4 border-indigo-500 flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div>
+                <h2 className="text-sm font-bold text-indigo-900 uppercase tracking-widest flex items-center gap-2 mb-2">
+                    <ShieldCheck size={18} className="text-indigo-600" /> 
+                    Calidad de Datos (ISO/IEC 25012)
+                </h2>
+                <div className="flex items-end gap-3">
+                    <span className="text-5xl font-black text-gray-800 tracking-tighter">
+                        {calidadData.indice_global}%
+                    </span>
+                    <div className="mb-2">
+                         <span className={`text-xs font-bold px-2 py-1 rounded border ${
+                            calidadData.indice_global > 90 
+                            ? 'bg-green-100 text-green-700 border-green-200' 
+                            : 'bg-yellow-100 text-yellow-700 border-yellow-200'
+                        }`}>
+                            {calidadData.estado}
+                        </span>
+                        <p className="text-xs text-gray-400 mt-1">Índice de Fiabilidad de Información</p>
+                    </div>
+                </div>
+            </div>
+
+            <div className="flex gap-6 border-t md:border-t-0 md:border-l border-indigo-100 pt-4 md:pt-0 md:pl-6">
+                <div className="text-center">
+                    <p className="text-2xl font-bold text-gray-700">{calidadData.metricas.precision}%</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase">Precisión</p>
+                </div>
+                <div className="text-center">
+                    <p className="text-2xl font-bold text-gray-700">{calidadData.metricas.completitud}%</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase">Completitud</p>
+                </div>
+                <div className="text-center hidden sm:block">
+                    <p className="text-2xl font-bold text-gray-700">{calidadData.metricas.registros_auditados}</p>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase">Auditados</p>
+                </div>
+            </div>
+        </div>
+      )}
+
+      {/* 3. PERSPECTIVA ESTUDIANTE */}
       <div>
         <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
             <GraduationCap size={16} className="text-unach-red" /> Perspectiva Estudiante
@@ -105,7 +163,6 @@ const DashboardCoordinador: React.FC = () => {
                         <CheckCircle2 size={32} />
                     </div>
                 </div>
-                {/* Barra de progreso */}
                 <div className="w-full bg-gray-100 rounded-full h-2 mt-4 overflow-hidden">
                     <div 
                         className="bg-unach-blue h-full rounded-full transition-all duration-1000 ease-out" 
@@ -129,7 +186,6 @@ const DashboardCoordinador: React.FC = () => {
                         <Star size={32} fill="currentColor" />
                     </div>
                 </div>
-                {/* Estrellas visuales */}
                 <div className="flex gap-1 mt-4">
                     {[1, 2, 3, 4, 5].map((star) => (
                         <Star 
@@ -143,7 +199,7 @@ const DashboardCoordinador: React.FC = () => {
         </div>
       </div>
 
-      {/* 3. PERSPECTIVA PROCESOS (Gráficos) */}
+      {/* 4. PERSPECTIVA PROCESOS */}
       <div>
         <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2 mt-8">
             <Activity size={16} className="text-unach-red" /> Perspectiva Procesos Internos
@@ -181,7 +237,6 @@ const DashboardCoordinador: React.FC = () => {
                                 paddingAngle={5}
                                 dataKey="value"
                             >
-                                {/* Usamos _ para ignorar el primer argumento y evitar warning TS */}
                                 {dataPastel.map((_, index) => (
                                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} strokeWidth={0} />
                                 ))}
@@ -209,7 +264,7 @@ const DashboardCoordinador: React.FC = () => {
         </div>
       </div>
 
-      {/* 4. PERSPECTIVA RECURSOS (Resumen) */}
+      {/* 5. PERSPECTIVA RECURSOS */}
       <div>
         <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2 mt-8">
             <Briefcase size={16} className="text-unach-red" /> Perspectiva Recursos
@@ -248,7 +303,46 @@ const DashboardCoordinador: React.FC = () => {
                     <p className="text-xs text-gray-500 font-bold uppercase">Est. por Tutor</p>
                 </div>
             </div>
+        </div>
+      </div>
 
+      {/* 6. PERSPECTIVA APRENDIZAJE Y CRECIMIENTO (NUEVA SECCIÓN) */}
+      <div>
+        <h2 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2 mt-8">
+            <BookOpen size={16} className="text-unach-red" /> Perspectiva Aprendizaje y Crecimiento
+        </h2>
+        <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row items-center justify-between gap-6 hover:shadow-md transition-all">
+            <div className="flex items-center gap-4">
+                <div className="p-4 bg-orange-50 text-orange-600 rounded-full">
+                    <Users size={28} />
+                </div>
+                <div>
+                    <div className="flex items-baseline gap-2">
+                        <p className="text-3xl font-black text-gray-800">
+                            {cmi.perspectiva_aprendizaje?.tasa_adherencia_tutores ?? 0}%
+                        </p>
+                    </div>
+                    <p className="text-xs text-gray-500 font-bold uppercase">Adherencia de Tutores</p>
+                    <p className="text-[10px] text-gray-400 mt-1">
+                        {cmi.perspectiva_aprendizaje?.tutores_activos ?? 0} tutores activos registrando datos.
+                    </p>
+                </div>
+            </div>
+            
+            {/* Barra de progreso de adherencia */}
+            <div className="w-full md:w-1/2 flex flex-col gap-1">
+                <div className="flex justify-between text-xs font-bold text-gray-400">
+                    <span>0%</span>
+                    <span>Meta: 80%</span>
+                    <span>100%</span>
+                </div>
+                <div className="h-3 w-full bg-gray-100 rounded-full overflow-hidden">
+                     <div 
+                        className="h-full bg-gradient-to-r from-orange-400 to-orange-600 transition-all duration-1000" 
+                        style={{ width: `${cmi.perspectiva_aprendizaje?.tasa_adherencia_tutores ?? 0}%` }}
+                    ></div>
+                </div>
+            </div>
         </div>
       </div>
 

@@ -16,11 +16,11 @@ class CMIService:
     def get_cmi_data(db: Session) -> Dict[str, Any]:
         """
         Calcula y retorna los indicadores clave de rendimiento (KPIs) para el CMI.
+        Cubre las 4 perspectivas: Estudiante, Procesos, Recursos y Aprendizaje.
         """
         
-        # --- Perspectiva: Estudiante ---
-        
-        # 1. Tasa de Asistencia a Tutorías
+        # --- Perspectiva 1: Estudiante ---
+        # 1. Tasa de Asistencia
         total_tutorias_finalizadas = db.query(Tutoria).filter(
             Tutoria.estado.in_(['realizada', 'no_asistio'])
         ).count()
@@ -35,28 +35,36 @@ class CMIService:
             else 0
         )
         
-        # 2. Nivel de Satisfacción Promedio
+        # 2. Satisfacción
         satisfaccion_promedio = db.query(func.avg(Evaluacion.estrellas)).scalar() or 0
         
-        # --- Perspectiva: Procesos Internos ---
-        
-        # 3. Total de Sesiones Realizadas
+        # --- Perspectiva 2: Procesos Internos ---
+        # 3. Total Sesiones
         total_sesiones_realizadas = tutorias_asistidas
         
-        # 4. Estado actual de las tutorías (para un gráfico de distribución)
+        # 4. Distribución
         distribucion_estados = db.query(
             Tutoria.estado, 
             func.count(Tutoria.id)
         ).group_by(Tutoria.estado).all()
         
-        # --- Perspectiva: Recursos ---
-        
-        # 5. Ratio Tutor-Estudiante
+        # --- Perspectiva 3: Recursos (Financiera/Recursos) ---
+        # 5. Ratio
         total_tutores = db.query(Tutor).count()
         total_estudiantes = db.query(Estudiante).count()
         ratio_tutor_estudiante = (
             total_estudiantes / total_tutores 
             if total_tutores > 0 
+            else 0
+        )
+        
+        # --- Perspectiva 4: Aprendizaje y Crecimiento (NUEVA) ---
+        # Métrica: Tasa de Adherencia/Uso de Tutores.
+        # Cuántos tutores han registrado al menos una tutoría vs el total.
+        tutores_activos = db.query(Tutoria.tutor_id).distinct().count()
+        tasa_adherencia_tutores = (
+            (tutores_activos / total_tutores * 100)
+            if total_tutores > 0
             else 0
         )
         
@@ -77,11 +85,14 @@ class CMIService:
                 "total_tutores": total_tutores,
                 "total_estudiantes": total_estudiantes,
                 "ratio_tutor_estudiante": round(ratio_tutor_estudiante, 2),
+            },
+            "perspectiva_aprendizaje": {
+                "tasa_adherencia_tutores": round(tasa_adherencia_tutores, 2),
+                "tutores_activos": tutores_activos
             }
         }
         
         return cmi
 
-
-# Instancia del servicio para importar
+# Instancia del servicio
 cmi_service = CMIService()

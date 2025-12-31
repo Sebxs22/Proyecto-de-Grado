@@ -14,3 +14,5 @@ pydantic-settings
 argon2-cffi
 scikit-learn
 joblib
+matplotlib
+seaborn
