@@ -9,42 +9,59 @@ from app.services.prediction_service import prediction_service
 from app.services.tutoria_service import tutoria_service
 from app.schemas.tutoria import TutoriaCreate
 
-def _crear_tutoria_proactiva(db: Session, matricula: Dict[str, Any], riesgo_nivel: str) -> bool:
+def _crear_tutoria_proactiva(db: Session, matricula: Dict[str, Any], nivel_probabilidad: str) -> bool:
     """
     Función interna para crear una tutoría de refuerzo.
-    ✅ Retorna True si creó la tutoría, False si no la creó.
+    Incluye bloqueo de base de datos para evitar duplicados por concurrencia.
     """
     try:
-        tema_riesgo = f"Refuerzo por Riesgo {riesgo_nivel.upper()} Detectado"
+        # El tema indica claramente por qué se creó
+        tema_riesgo = f"Refuerzo Académico - Nivel {nivel_probabilidad}"
 
-        # 1. ¿Ya existe una tutoría abierta (solicitada/programada)?
-        query_abierta = text("""
+        # -------------------------------------------------------------------------
+        # 🔒 BLOQUEO DE SEGURIDAD (SOLUCIÓN A DUPLICADOS)
+        # Bloqueamos la fila de la matrícula para que nadie más pueda leer/escribir
+        # sobre ella hasta que esta función termine. 
+        # Si React manda 2 peticiones, la segunda se quedará "congelada" aquí 
+        # esperando a que la primera termine. Cuando entre, ya verá el duplicado.
+        # -------------------------------------------------------------------------
+        db.execute(
+            text("SELECT id FROM tutorias_unach.matriculas WHERE id = :mid FOR UPDATE"), 
+            {"mid": matricula["matricula_id"]}
+        )
+
+        print(f"🔄 Verificando creación automática para Matrícula {matricula['matricula_id']}...")
+
+        # 1. FILTRO: Verificar si ya existe una tutoría idéntica ACTIVA
+        query_existente = text("""
             SELECT 1 FROM tutorias_unach.tutorias
             WHERE matricula_id = :matricula_id
-            AND estado IN ('solicitada', 'programada')
+            AND (
+                (tema = :tema AND estado != 'cancelada')  -- Ya existe esta alerta específica
+                OR 
+                (estado IN ('solicitada', 'programada'))  -- Ya tiene una tutoría pendiente (cualquiera)
+            )
         """)
-        existe_abierta = db.execute(query_abierta, {"matricula_id": matricula["matricula_id"]}).scalar()
-
-        # 2. ¿Ya se completó una tutoría de refuerzo?
-        query_completada = text("""
-            SELECT 1 FROM tutorias_unach.tutorias
-            WHERE matricula_id = :matricula_id
-            AND tema = :tema_riesgo
-            AND estado = 'realizada'
-        """)
-        existe_completada = db.execute(query_completada, {
+        ya_existe = db.execute(query_existente, {
             "matricula_id": matricula["matricula_id"],
-            "tema_riesgo": tema_riesgo
+            "tema": tema_riesgo
         }).scalar()
 
-        if existe_abierta or existe_completada or not matricula.get("tutor_id"):
-            return False  # ✅ No se creó
+        if ya_existe:
+            print(f"⚠️ Alerta duplicada o pendiente detectada. No se crea nada.")
+            return False
+
+        if not matricula.get("tutor_id"):
+            print(f"⚠️ La materia no tiene tutor asignado. No se puede crear.")
+            return False
         
-        # 3. Crear la tutoría
+        # 2. Crear la tutoría
+        fecha_actual = datetime.now().replace(microsecond=0)
+        
         tutoria_payload = TutoriaCreate(
             matricula_id=matricula["matricula_id"],
             tutor_id=matricula["tutor_id"],
-            fecha=datetime.now(),
+            fecha=fecha_actual, 
             tema=tema_riesgo,
             modalidad="Virtual"
         )
@@ -56,13 +73,13 @@ def _crear_tutoria_proactiva(db: Session, matricula: Dict[str, Any], riesgo_nive
             tema_predeterminado=tema_riesgo,
             modalidad_predeterminada="Virtual"
         )
-        print(f"✅ Tutoría proactiva creada para matrícula {matricula['matricula_id']}")
-        return True  # ✅ Se creó exitosamente
+        print(f"✅ ¡ÉXITO! Tutoría automática creada y guardada.")
+        return True 
         
     except Exception as e:
-        print(f"❌ Error al crear tutoría proactiva: {e}")
+        print(f"❌ ERROR CRÍTICO al crear tutoría proactiva: {e}")
         db.rollback()
-        return False  # ✅ Falló la creación
+        return False
 
 
 def get_student_kpis(db: Session, estudiante_id: int) -> Dict[str, Any]:
@@ -71,7 +88,7 @@ def get_student_kpis(db: Session, estudiante_id: int) -> Dict[str, Any]:
     """
     query_historial = text("""
         SELECT 
-            pa.nombre AS periodo,  -- <--- 1. NUEVO CAMPO
+            pa.nombre AS periodo,
             a.nombre AS asignatura,
             t_u.nombre AS tutor_nombre,
             n.parcial1,
@@ -83,7 +100,7 @@ def get_student_kpis(db: Session, estudiante_id: int) -> Dict[str, Any]:
             m.estudiante_id,
             (COALESCE(n.parcial1, 0) + COALESCE(n.parcial2, 0)) / 2 AS promedio_parciales
         FROM tutorias_unach.matriculas m
-        JOIN tutorias_unach.periodos_academicos pa ON m.periodo_id = pa.id -- <--- 2. NUEVO JOIN
+        JOIN tutorias_unach.periodos_academicos pa ON m.periodo_id = pa.id
         JOIN tutorias_unach.asignaturas a ON m.asignatura_id = a.id
         LEFT JOIN tutorias_unach.notas n ON m.id = n.matricula_id
         LEFT JOIN tutorias_unach.tutores t ON m.tutor_id = t.id
@@ -92,43 +109,45 @@ def get_student_kpis(db: Session, estudiante_id: int) -> Dict[str, Any]:
         ORDER BY m.periodo_id DESC, a.nombre;
     """)
     
-    # ... (El resto de la función sigue igual) ...
-    # Solo asegúrate de que la lógica de predicción y retorno se mantenga.
-    # No necesitas cambiar nada más abajo, el diccionario 'materia_dict'
-    # incluirá automáticamente 'periodo' gracias al SELECT.
-
     historial_result = db.execute(query_historial, {"estudiante_id": estudiante_id}).mappings().all()
     
     historial_detallado = []
     suma_finales, total_finales = 0, 0
-    tutoria_creada_en_esta_ejecucion = False
+    
+    # Control local para esta ejecución (por si hay duplicados en el mismo query)
+    tutorias_creadas_en_loop = set()
     
     for materia in historial_result:
         materia_dict = dict(materia)
+        mid = materia_dict['matricula_id']
         
-        # ... (MANTENER LÓGICA DE RIESGO Y TUTORÍA PROACTIVA IGUAL QUE ANTES) ...
+        # Lógica de Riesgo
         if materia_dict.get('situacion') not in ['APROBADO', 'REPROBADO']:
             risk_data = prediction_service.predict_risk(
                 db=db, 
                 estudiante_id=materia_dict['estudiante_id'], 
-                matricula_id=materia_dict['matricula_id']
+                matricula_id=mid
             )
             materia_dict.update(risk_data)
             
-            riesgo_detectado = risk_data.get('riesgo_nivel')
+            probabilidad_aprobacion = risk_data.get('riesgo_nivel') 
             
-            if riesgo_detectado in ['ALTO', 'MEDIO'] and not tutoria_creada_en_esta_ejecucion:
-                resultado = _crear_tutoria_proactiva(db, materia_dict, riesgo_detectado)
-                if resultado:
-                    tutoria_creada_en_esta_ejecucion = True
+            # Solo si la Probabilidad de éxito es BAJA o MEDIA (Riesgo real)
+            if probabilidad_aprobacion in ['BAJO', 'MEDIO']:
+                # Evitamos intentar crear 2 veces para la misma matrícula en el mismo loop
+                if mid not in tutorias_creadas_en_loop:
+                    resultado = _crear_tutoria_proactiva(db, materia_dict, probabilidad_aprobacion)
+                    if resultado:
+                        tutorias_creadas_en_loop.add(mid)
         else:
             if materia_dict.get('situacion') == 'REPROBADO':
-                materia_dict['riesgo_nivel'] = 'Riesgo Alto (Finalizado)'
+                materia_dict['riesgo_nivel'] = 'BAJO'
                 materia_dict['riesgo_color'] = 'red'
+                materia_dict['probabilidad_riesgo'] = 0.0
             else: 
-                materia_dict['riesgo_nivel'] = 'Riesgo Bajo (Finalizado)'
+                materia_dict['riesgo_nivel'] = 'ALTO'
                 materia_dict['riesgo_color'] = 'green'
-            materia_dict['probabilidad_riesgo'] = None
+                materia_dict['probabilidad_riesgo'] = 100.0
         
         materia_dict['tutor_nombre'] = materia_dict.get('tutor_nombre') or 'No Asignado'
         historial_detallado.append(materia_dict)
