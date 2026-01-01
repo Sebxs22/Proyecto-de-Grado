@@ -4,64 +4,62 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { getTutorDashboard, TutorDashboard } from '../services/tutorDashboardService'; 
 import { Link } from 'react-router-dom';
 import { 
-  Users, 
-  TrendingUp, 
-  AlertCircle, 
-  Star, 
-  Clock,
-  BookOpen,
-  School,
-  ChevronRight,
-  Calendar,
-  ChevronDown, // Para el acordeón
-  ChevronUp
+  TrendingUp, AlertCircle, Star, Clock, BookOpen, School, Calendar, 
+  ChevronDown, ChevronUp, ArrowRightCircle, Users, 
+  Activity, BrainCircuit
 } from 'lucide-react';
 
-// Función Helper para formatear nombre
-const formatName = (fullName: string) => {
-    if (!fullName) return "Tutor";
-    const parts = fullName.split(' ').filter(Boolean);
-    if (parts.length >= 3) {
-        const name = parts[0].charAt(0).toUpperCase() + parts[0].slice(1).toLowerCase();
-        const surname = parts[2].charAt(0).toUpperCase() + parts[2].slice(1).toLowerCase();
-        return `${name} ${surname}`;
-    }
-    return parts[0].charAt(0).toUpperCase() + parts[0].slice(1).toLowerCase(); // Fallback
-};
-
-// Función auxiliar para parseo seguro
 const safeParseFloat = (value: number | null | undefined): number => {
     if (value === null || value === undefined) return 0;
     const num = Number(value);
     return isNaN(num) ? 0 : num;
 };
 
+// Componente Circular
+const RiskCircle = ({ percent }: { percent: number }) => {
+    const radius = 18;
+    const circumference = 2 * Math.PI * radius;
+    const offset = circumference - (percent / 100) * circumference;
+    
+    // LOGICA VISUAL:
+    // < 40% = Rojo (Peligro de reprobar)
+    // 40-69% = Amarillo (En la cuerda floja)
+    // > 70% = Verde (Aprobación probable)
+    let color = 'text-rose-500'; 
+    if (percent >= 70) color = 'text-emerald-500';
+    else if (percent >= 40) color = 'text-amber-500';
+
+    return (
+        <div className="relative w-12 h-12 flex items-center justify-center">
+            <svg className="w-full h-full transform -rotate-90">
+                <circle cx="24" cy="24" r={radius} stroke="#f3f4f6" strokeWidth="4" fill="transparent" />
+                <circle cx="24" cy="24" r={radius} stroke="currentColor" strokeWidth="4" fill="transparent" 
+                    strokeDasharray={circumference} 
+                    strokeDashoffset={offset} 
+                    strokeLinecap="round"
+                    className={`${color} transition-all duration-1000 ease-out`} 
+                />
+            </svg>
+            <span className={`absolute text-[10px] font-bold ${color}`}>{Math.round(percent)}%</span>
+        </div>
+    );
+};
+
 const DashboardTutor: React.FC = () => {
   const [dashboardData, setDashboardData] = useState<TutorDashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  
-  // Estado para controlar qué cursos están expandidos (Abiertos)
-  // Usamos un objeto donde la clave es el ID del curso y el valor es true/false
   const [expandedCourses, setExpandedCourses] = useState<Record<string, boolean>>({});
+  const [showAllRisks, setShowAllRisks] = useState(false);
 
   const fetchDashboardData = useCallback(async () => {
     try {
       setLoading(true);
       const data = await getTutorDashboard();
       setDashboardData(data);
-      
-      // Opcional: Si quieres que el PRIMER curso aparezca abierto por defecto
-      /*
-      if (data.cursos.length > 0) {
-          const firstKey = `${data.cursos[0].periodo} - ${data.cursos[0].asignatura}`;
-          setExpandedCourses({ [firstKey]: true });
-      }
-      */
-     
       setError(null);
     } catch (err) {
-      console.error("❌ Error al cargar dashboard tutor:", err);
+      console.error("Error dashboard:", err);
       setError('No se pudo cargar la información.');
     } finally {
       setLoading(false);
@@ -70,27 +68,40 @@ const DashboardTutor: React.FC = () => {
 
   useEffect(() => { fetchDashboardData(); }, [fetchDashboardData]);
 
-  // Función para abrir/cerrar una tarjeta
   const toggleCourse = (key: string) => {
-      setExpandedCourses(prev => ({
-          ...prev,
-          [key]: !prev[key] // Invierte el valor actual (true -> false, false -> true)
-      }));
+      setExpandedCourses(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
   if (loading) return (
-    <div className="flex flex-col items-center justify-center h-96 text-unach-blue animate-pulse">
-      <School size={48} strokeWidth={1} />
-      <p className="mt-4 font-medium text-sm tracking-wide">CARGANDO PANEL DOCENTE...</p>
+    <div className="flex flex-col items-center justify-center h-screen bg-gray-50/50 text-unach-blue animate-pulse">
+      <School size={64} strokeWidth={1} className="drop-shadow-sm" />
+      <p className="mt-6 font-semibold text-sm tracking-widest text-gray-400">CARGANDO ECOSISTEMA DOCENTE...</p>
     </div>
   );
 
-  if (error || !dashboardData) return <div className="text-center text-unach-red p-12 font-bold border border-red-100 bg-red-50 rounded-xl mt-10">{error || 'No se encontraron datos.'}</div>;
+  if (error || !dashboardData) return (
+    <div className="flex justify-center items-center h-96">
+        <div className="text-center text-red-500 p-8 font-bold border border-red-100 bg-red-50 rounded-2xl shadow-sm max-w-md">
+            <AlertCircle size={48} className="mx-auto mb-4 opacity-50" />
+            <p>{error || 'No se encontraron datos.'}</p>
+        </div>
+    </div>
+  );
 
-  const { nombre, cursos, tutorias_pendientes, average_rating = 0.0 } = dashboardData as TutorDashboard & { average_rating: number };
+  const { nombre, cursos, tutorias_pendientes, average_rating = 0.0 } = dashboardData as any;
 
-  // Agrupación por cursos
-  const cursosAgrupados = cursos.reduce((acc, curso) => {
+  // 1. FILTRADO
+  const estudiantesEnRiesgo = cursos.filter((c: any) => 
+      c.riesgo_nivel === 'ALTO' || 
+      c.riesgo_nivel === 'MEDIO' || 
+      c.riesgo_nivel === 'Riesgo Alto (Finalizado)' ||
+      (c.probabilidad_riesgo && c.probabilidad_riesgo > 40)
+  ).sort((a: any, b: any) => (b.probabilidad_riesgo || 0) - (a.probabilidad_riesgo || 0));
+
+  const visibleRisks = showAllRisks ? estudiantesEnRiesgo : estudiantesEnRiesgo.slice(0, 5);
+
+  // 2. AGRUPACIÓN
+  const cursosAgrupados = cursos.reduce((acc: any, curso: any) => {
     const key = `${curso.periodo} - ${curso.asignatura}`;
     if (!acc[key]) {
       acc[key] = {
@@ -101,214 +112,331 @@ const DashboardTutor: React.FC = () => {
     }
     acc[key].estudiantes.push(curso);
     return acc;
-  }, {} as Record<string, { periodo: string; asignatura: string; estudiantes: typeof cursos }>);
+  }, {});
 
-  const calcularEstadisticas = (estudiantes: typeof cursos) => {
+  const calcularEstadisticas = (estudiantes: any[]) => {
     const estudiantesConNota = estudiantes.filter(e => e.final !== null);
     const notasValidas = estudiantesConNota.map(e => safeParseFloat(e.final));
     const aprobados = estudiantes.filter(e => e.situacion === 'APROBADO').length;
     const reprobados = estudiantes.filter(e => e.situacion === 'REPROBADO').length;
     const promedioFinal = notasValidas.length > 0
-        ? (notasValidas.reduce((sum, n) => sum + n, 0) / notasValidas.length).toFixed(2)
+        ? (notasValidas.reduce((sum: number, n: number) => sum + n, 0) / notasValidas.length).toFixed(2)
         : 'N/A';
     return { total: estudiantes.length, aprobados, reprobados, promedioFinal };
   };
 
-  // Mapeo de colores
-  const riesgoColorMap: Record<string, string> = {
-      red: 'text-rose-700 bg-rose-50 border-rose-200 ring-1 ring-rose-100',
-      yellow: 'text-amber-700 bg-amber-50 border-amber-200 ring-1 ring-amber-100',
-      green: 'text-emerald-700 bg-emerald-50 border-emerald-200 ring-1 ring-emerald-100',
-      gray: 'text-gray-400 bg-gray-50 border-gray-200'
+  const situacionColorClasses: Record<string, string> = {
+      APROBADO: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
+      REPROBADO: 'bg-rose-50 text-rose-700 border border-rose-100',
+      Pendiente: 'bg-gray-50 text-gray-500 border border-gray-200',
   };
 
-  const situacionColorClasses: Record<string, string> = {
-      APROBADO: 'bg-emerald-100 text-emerald-700 border border-emerald-200',
-      REPROBADO: 'bg-rose-100 text-rose-700 border border-rose-200',
-      Pendiente: 'bg-gray-100 text-gray-600 border border-gray-200',
+  const riesgoColorMap: Record<string, string> = {
+      red: 'text-rose-600 bg-rose-50 border-rose-200',
+      yellow: 'text-amber-600 bg-amber-50 border-amber-200',
+      green: 'text-emerald-600 bg-emerald-50 border-emerald-200',
+      gray: 'text-gray-400 bg-gray-50 border-gray-100'
   };
 
   return (
-    <div className="space-y-8 pb-12 animate-in fade-in duration-500">
+    <div className="space-y-10 pb-16 animate-in fade-in duration-700 font-sans">
       
       {/* HEADER */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between border-b border-gray-200 pb-6">
+      <div className="flex flex-col md:flex-row md:items-end md:justify-between border-b border-gray-100 pb-6 gap-4">
           <div>
-              <h1 className="text-3xl font-extrabold text-unach-blue flex items-center gap-3">
-                  {/* AQUI APLICAMOS EL FORMATO */}
-                  Hola, Tutor {formatName(nombre)} <span className="text-2xl">👨‍🏫</span>
+              <div className="flex items-center gap-2 mb-1">
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-50 text-unach-blue uppercase tracking-wider">Docente</span>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-50 text-gray-400 uppercase tracking-wider">Dashboard</span>
+              </div>
+              <h1 className="text-3xl md:text-4xl font-black text-gray-800 tracking-tight flex items-center gap-3">
+                  Hola, {nombre ? nombre.split(' ')[0] : 'Tutor'} <span className="animate-wave origin-bottom-right inline-block">👋</span>
               </h1>
-              <p className="text-gray-500 mt-1 ml-1 flex items-center gap-2 text-sm">
-                  <School size={16} /> Gestión Académica y Tutorial
+              <p className="text-gray-500 mt-2 text-sm max-w-lg leading-relaxed">
+                  Sistema de Monitoreo Académico y Alerta Temprana.
               </p>
           </div>
           <div className="hidden md:block text-right">
-             <p className="text-xs font-bold text-unach-blue/60 uppercase tracking-widest">Periodo Activo</p>
-             <p className="text-sm font-semibold text-gray-700">Noviembre 2025 - Abril 2026</p>
+             <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full border border-gray-200 shadow-sm text-sm font-medium text-gray-600">
+                <Calendar size={14} className="text-unach-blue" />
+                <span>Nov 2025 - Abr 2026</span>
+             </div>
           </div>
       </div>
 
-      {/* TARJETAS KPI (Sin cambios) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-xl shadow-sm border border-emerald-100 flex items-center justify-between hover:shadow-md transition-all group relative overflow-hidden">
-            <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-50 rounded-full -mr-8 -mt-8 opacity-50 transition-transform group-hover:scale-110"></div>
-            <div className="z-10">
-                <p className="text-xs font-bold text-emerald-600 uppercase tracking-widest mb-2 flex items-center gap-2">
-                    <Star size={14} className="fill-emerald-600" /> Calificación Promedio
-                </p>
-                <div className="flex items-end gap-2">
-                    <span className="text-5xl font-black text-gray-800 tracking-tighter">
-                        {Number(average_rating).toFixed(2)}
-                    </span>
-                    <span className="text-lg text-gray-400 font-medium mb-1.5">/ 5.0</span>
-                </div>
-            </div>
-            <div className="h-16 w-16 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 shadow-sm z-10">
-                <TrendingUp size={32} strokeWidth={2} />
-            </div>
-        </div>
-        
-        <div className={`p-6 rounded-xl shadow-sm border flex items-center justify-between hover:shadow-md transition-all group relative overflow-hidden ${tutorias_pendientes.length > 0 ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-100'}`}>
-            <div className="z-10">
-                <p className={`text-xs font-bold uppercase tracking-widest mb-2 flex items-center gap-2 ${tutorias_pendientes.length > 0 ? 'text-amber-700' : 'text-gray-400'}`}>
-                    <Clock size={14} /> Solicitudes Pendientes
-                </p>
-                <div className="flex items-center gap-4">
-                    <span className={`text-5xl font-black tracking-tighter ${tutorias_pendientes.length > 0 ? 'text-amber-600' : 'text-gray-300'}`}>
-                        {tutorias_pendientes.length}
-                    </span>
-                    {tutorias_pendientes.length > 0 && (
-                        <Link 
-                            to="/tutorias/tutor"
-                            className="px-4 py-2 bg-white text-amber-700 text-xs font-bold rounded-lg shadow-sm hover:shadow hover:bg-amber-50 border border-amber-200 transition-all flex items-center gap-1"
-                        >
-                            Gestionar <ChevronRight size={14} />
+      {/* --- MÓDULO DE ALERTA TEMPRANA --- */}
+      {estudiantesEnRiesgo.length > 0 ? (
+        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-white to-rose-50 border border-rose-100 shadow-xl shadow-rose-100/50 group">
+            <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-rose-500"></div>
+            
+            <div className="p-6 md:p-8">
+                <div className="flex flex-col md:flex-row gap-6 items-start md:items-center mb-6">
+                    <div className="flex-shrink-0">
+                        <div className="relative">
+                            <div className="absolute inset-0 bg-rose-200 rounded-full blur animate-pulse"></div>
+                            <div className="relative p-4 bg-white text-rose-500 rounded-full shadow-md ring-4 ring-rose-50">
+                                <BrainCircuit size={32} strokeWidth={1.5} />
+                            </div>
+                            <div className="absolute -top-1 -right-1 bg-rose-600 text-white text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full border-2 border-white shadow-sm">
+                                {estudiantesEnRiesgo.length}
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="flex-1">
+                        <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                            Predicción de Riesgo Académico (IA)
+                            <span className="px-2 py-0.5 bg-rose-100 text-rose-700 text-[10px] uppercase font-bold rounded-full tracking-wider">Alta Prioridad</span>
+                        </h3>
+                        <p className="text-gray-600 mt-2 text-sm leading-relaxed">
+                            Intervención sugerida basada en <strong>Notas</strong> y <strong>Tutorías</strong>.
+                        </p>
+                    </div>
+
+                    <div className="flex-shrink-0">
+                        <Link to="/tutorias/tutor" className="group/btn inline-flex items-center gap-2 px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold rounded-xl shadow-md shadow-rose-200 transition-all transform hover:-translate-y-0.5">
+                            Agendar Tutorías
+                            <ArrowRightCircle size={18} className="group-hover/btn:translate-x-1 transition-transform" />
                         </Link>
+                    </div>
+                </div>
+
+                {/* --- LISTA DE DETALLE (TITULO UNICO: Estudiante ID) --- */}
+                <div className="bg-white rounded-xl border border-rose-100 shadow-sm overflow-hidden">
+                    <div className="grid grid-cols-1 divide-y divide-gray-100">
+                        {visibleRisks.map((est: any, idx: number) => (
+                            <div key={idx} className="p-4 flex flex-col md:flex-row items-center gap-4 hover:bg-rose-50/30 transition-colors animate-in fade-in duration-300">
+                                
+                                {/* Info Estudiante */}
+                                <div className="flex items-center gap-3 flex-1 min-w-[200px]">
+                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold border-2 border-white shadow-sm ${est.riesgo_nivel === 'ALTO' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
+                                        E
+                                    </div>
+                                    <div>
+                                        {/* ✅ TITULO ÚNICO DIRECTO */}
+                                        <h4 className="text-sm font-bold text-gray-800">
+                                            Estudiante {est.estudiante_id}
+                                        </h4>
+                                        <p className="text-xs text-gray-500 font-medium flex items-center gap-1 mt-0.5">
+                                            <BookOpen size={10} /> {est.asignatura}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {/* Diagnóstico */}
+                                <div className="flex-1 md:border-l md:border-r border-gray-100 md:px-4 py-2 md:py-0 w-full md:w-auto">
+                                    <p className="text-xs text-gray-600 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                                        <span className="font-bold text-gray-400 uppercase text-[9px] block mb-1">Diagnóstico:</span>
+                                        {est.mensaje_explicativo || "Riesgo detectado por inactividad académica."}
+                                    </p>
+                                </div>
+
+                                {/* Métricas Clave */}
+                                <div className="flex items-center gap-6 justify-between md:justify-end w-full md:w-auto">
+                                    <div className="text-center">
+                                        <p className="text-[9px] font-bold text-gray-400 uppercase">Nota</p>
+                                        <p className="text-sm font-black text-gray-700">{est.parcial1 ?? '-'}</p>
+                                    </div>
+                                    <div className="text-center">
+                                        <p className="text-[9px] font-bold text-gray-400 uppercase">Tutorías</p>
+                                        <p className={`text-sm font-black ${est.tutorias_acumuladas > 0 ? 'text-emerald-600' : 'text-gray-400'}`}>
+                                            {est.tutorias_acumuladas ?? 0}
+                                        </p>
+                                    </div>
+                                    
+                                    <div className="relative w-12 h-12 flex items-center justify-center ml-2">
+                                        <RiskCircle percent={est.probabilidad_riesgo || 0} />
+                                    </div>
+                                </div>
+                            </div>
+                        ))}
+                    </div>
+                    
+                    {/* BOTÓN VER MÁS */}
+                    {estudiantesEnRiesgo.length > 5 && (
+                        <div 
+                            onClick={() => setShowAllRisks(!showAllRisks)}
+                            className="bg-rose-50/50 p-3 text-center border-t border-rose-100 cursor-pointer hover:bg-rose-100 transition-colors group select-none"
+                        >
+                            <span className="text-xs font-bold text-rose-600 flex items-center justify-center gap-2">
+                                {showAllRisks 
+                                    ? <>Ver menos <ChevronUp size={14} /></> 
+                                    : <>Ver {estudiantesEnRiesgo.length - 5} estudiantes más <ChevronDown size={14} /></>
+                                }
+                            </span>
+                        </div>
                     )}
                 </div>
             </div>
-            <div className={`h-16 w-16 rounded-2xl flex items-center justify-center shadow-sm z-10 ${tutorias_pendientes.length > 0 ? 'bg-white text-amber-500' : 'bg-gray-50 text-gray-300'}`}>
-                <AlertCircle size={32} strokeWidth={2} />
+        </div>
+      ) : (
+        <div className="rounded-2xl bg-gradient-to-r from-emerald-50 to-white border border-emerald-100 p-6 flex items-center gap-4 shadow-sm">
+            <div className="p-3 bg-white text-emerald-500 rounded-full shadow-sm ring-1 ring-emerald-100">
+                <Activity size={24} />
+            </div>
+            <div>
+                <h3 className="text-sm font-bold text-emerald-800 uppercase tracking-wide">Sin Alertas Críticas</h3>
+                <p className="text-sm text-emerald-600/80">Todos tus estudiantes mantienen un nivel de riesgo controlado.</p>
+            </div>
+        </div>
+      )}
+
+      {/* --- KPIS GENERALES --- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center group hover:border-emerald-200 transition-colors">
+            <div>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Calificación Docente</p>
+                <div className="flex items-baseline gap-2">
+                    <span className="text-4xl font-black text-gray-800 group-hover:text-emerald-600 transition-colors">
+                        {Number(average_rating).toFixed(1)}
+                    </span>
+                    <span className="text-sm text-gray-400 font-bold">/ 5.0</span>
+                </div>
+                <div className="mt-2 flex gap-1">
+                     {[1, 2, 3, 4, 5].map((star) => (
+                        <Star key={star} size={12} className={`${star <= Math.round(average_rating) ? 'text-emerald-400 fill-emerald-400' : 'text-gray-200 fill-gray-200'}`} />
+                     ))}
+                </div>
+            </div>
+            <div className="p-4 bg-emerald-50 text-emerald-500 rounded-full">
+                <TrendingUp size={28} />
+            </div>
+        </div>
+
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center group hover:border-amber-200 transition-colors">
+            <div>
+                <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Solicitudes Pendientes</p>
+                <div className="flex items-baseline gap-2">
+                    <span className="text-4xl font-black text-gray-800 group-hover:text-amber-600 transition-colors">
+                        {tutorias_pendientes.length}
+                    </span>
+                    <span className="text-sm text-gray-400 font-bold">por revisar</span>
+                </div>
+                {tutorias_pendientes.length > 0 ? (
+                    <Link to="/tutorias/tutor" className="mt-2 text-xs font-bold text-amber-600 flex items-center gap-1 hover:underline">
+                        Gestionar ahora <ArrowRightCircle size={12} />
+                    </Link>
+                ) : (
+                    <span className="mt-2 text-xs font-bold text-emerald-500 flex items-center gap-1">
+                        ¡Todo al día! <Activity size={12} />
+                    </span>
+                )}
+            </div>
+            <div className="p-4 bg-amber-50 text-amber-500 rounded-full">
+                <Clock size={28} />
             </div>
         </div>
       </div>
 
-      {/* SECCIÓN DE CURSOS (ACORDEÓN) */}
+      {/* --- ACORDEÓN DE ASIGNATURAS --- */}
       <div className="space-y-6">
-        <div className="flex items-center gap-3 mb-4">
-            <div className="p-2 bg-unach-blue rounded-lg text-white shadow-md">
+        <div className="flex items-center gap-3 px-1">
+            <div className="p-2 bg-unach-blue rounded-lg text-white shadow-md shadow-blue-200">
                 <BookOpen size={20} />
             </div>
             <h2 className="text-xl font-bold text-gray-800">Mis Asignaturas</h2>
         </div>
         
-        {Object.keys(cursosAgrupados).length > 0 ? (
-          Object.entries(cursosAgrupados).map(([key, cursoData]) => {
-            const stats = calcularEstadisticas(cursoData.estudiantes);
-            const isExpanded = !!expandedCourses[key]; // ¿Está abierta esta tarjeta?
-            
-            return (
-              // Contenedor principal de la tarjeta
-              <div key={key} className="bg-white border border-gray-200 rounded-xl shadow-sm overflow-hidden transition-all hover:shadow-md">
-                
-                {/* HEADER DEL CURSO (Ahora es clicable) */}
-                <div 
-                    onClick={() => toggleCourse(key)}
-                    className="p-6 bg-white cursor-pointer group select-none flex flex-col md:flex-row md:items-center justify-between gap-4"
-                >
+        {Object.entries(cursosAgrupados).map(([key, data]: any) => (
+            <div key={key} className={`bg-white border rounded-2xl transition-all duration-300 ${expandedCourses[key] ? 'border-blue-100 shadow-md ring-1 ring-blue-50' : 'border-gray-200 shadow-sm hover:border-blue-200'}`}>
+                <div onClick={() => toggleCourse(key)} className="p-5 cursor-pointer select-none flex flex-col md:flex-row md:items-center justify-between gap-4">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                        <h3 className="text-lg font-extrabold text-unach-blue group-hover:text-blue-700 transition-colors">
-                            {cursoData.asignatura}
+                    <div className="flex items-center gap-3">
+                        <h3 className={`text-lg font-bold transition-colors ${expandedCourses[key] ? 'text-unach-blue' : 'text-gray-700'}`}>
+                            {data.asignatura}
                         </h3>
-                        {/* Indicador de estado abierto/cerrado */}
-                        {isExpanded ? <ChevronUp size={20} className="text-gray-400" /> : <ChevronDown size={20} className="text-gray-400" />}
+                        <div className={`p-1 rounded-full transition-colors ${expandedCourses[key] ? 'bg-blue-50 text-unach-blue' : 'bg-gray-50 text-gray-400'}`}>
+                            {expandedCourses[key] ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                        </div>
                     </div>
-                    <p className="text-xs font-medium text-gray-500 uppercase tracking-wider mt-1 flex items-center gap-1">
-                        <Calendar size={12} /> {cursoData.periodo}
-                    </p>
+                    <div className="flex items-center gap-2 mt-2">
+                        <span className="px-2 py-0.5 bg-gray-50 border border-gray-100 rounded text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1">
+                             <Calendar size={10} /> {data.periodo}
+                        </span>
+                        <span className="px-2 py-0.5 bg-gray-50 border border-gray-100 rounded text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1">
+                             <Users size={10} /> {data.estudiantes.length} Estudiantes
+                        </span>
+                    </div>
                   </div>
                   
-                  {/* MINI STATS (Incluyendo Promedio) */}
-                  <div className="flex flex-wrap gap-3 items-center">
-                    <div className="px-3 py-1.5 bg-gray-50 rounded-lg border border-gray-100 flex flex-col items-center min-w-[80px]">
-                        <p className="text-[9px] text-gray-400 font-bold uppercase">Total Est.</p>
-                        <p className="text-base font-bold text-gray-700">{stats.total}</p>
-                    </div>
-                    {/* ✅ AQUÍ AGREGAMOS EL PROMEDIO */}
-                    <div className="px-3 py-1.5 bg-indigo-50 rounded-lg border border-indigo-100 flex flex-col items-center min-w-[80px]">
-                        <p className="text-[9px] text-indigo-600 font-bold uppercase flex items-center gap-1">Promedio</p>
-                        <p className="text-base font-bold text-indigo-700">{stats.promedioFinal}</p>
-                    </div>
-                    <div className="px-3 py-1.5 bg-emerald-50 rounded-lg border border-emerald-100 flex flex-col items-center min-w-[80px]">
-                        <p className="text-[9px] text-emerald-600 font-bold uppercase">Aprobados</p>
-                        <p className="text-base font-bold text-emerald-700">{stats.aprobados}</p>
-                    </div>
-                    <div className="px-3 py-1.5 bg-rose-50 rounded-lg border border-rose-100 flex flex-col items-center min-w-[80px]">
-                        <p className="text-[9px] text-rose-600 font-bold uppercase">Reprobados</p>
-                        <p className="text-base font-bold text-rose-700">{stats.reprobados}</p>
-                    </div>
+                  {/* MINI DASHBOARD */}
+                  <div className="flex items-center gap-6 text-sm">
+                        <div className="text-center">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase">Promedio</p>
+                            <p className="font-black text-gray-800">{calcularEstadisticas(data.estudiantes).promedioFinal}</p>
+                        </div>
+                        <div className="h-8 w-px bg-gray-100"></div>
+                        <div className="text-center">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase">Aprob.</p>
+                            <p className="font-bold text-emerald-600">{calcularEstadisticas(data.estudiantes).aprobados}</p>
+                        </div>
+                        <div className="text-center">
+                            <p className="text-[10px] font-bold text-gray-400 uppercase">Reprob.</p>
+                            <p className="font-bold text-rose-600">{calcularEstadisticas(data.estudiantes).reprobados}</p>
+                        </div>
                   </div>
                 </div>
 
-                {/* CUERPO DEL CURSO (Tabla) - Solo se muestra si isExpanded es true */}
-                {isExpanded && (
-                    <div className="border-t border-gray-100 animate-in slide-in-from-top-2 duration-200">
+                {expandedCourses[key] && (
+                    <div className="border-t border-gray-100 bg-gray-50/30">
                         <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-100">
-                            <thead className="bg-gray-50 text-gray-500">
+                            <thead className="bg-gray-50/50 text-gray-400">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-bold uppercase tracking-wider w-1/3">Estudiante</th>
-                                <th className="px-6 py-3 text-center text-xs font-bold uppercase tracking-wider">P1</th>
-                                <th className="px-6 py-3 text-center text-xs font-bold uppercase tracking-wider">P2</th>
-                                <th className="px-6 py-3 text-center text-xs font-bold uppercase tracking-wider">Final</th>
-                                <th className="px-6 py-3 text-center text-xs font-bold uppercase tracking-wider">Estado</th>
-                                <th className="px-6 py-3 text-center text-xs font-bold uppercase tracking-wider">Riesgo Predictivo</th>
+                                <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest w-1/3">Estudiante</th>
+                                <th className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest">P1</th>
+                                <th className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest">P2</th>
+                                <th className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest">Final</th>
+                                <th className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest">Estado</th>
+                                <th className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest">Riesgo IA</th>
                             </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-50">
-                            {cursoData.estudiantes.map((estudiante, idx) => {
-                                const situacionColor = situacionColorClasses[estudiante.situacion || 'Pendiente'] || situacionColorClasses.Pendiente;
-                                const riesgoStyle = riesgoColorMap[estudiante.riesgo_color || 'gray'];
+                            {data.estudiantes.map((est: any, idx: number) => {
+                                const situacionColor = situacionColorClasses[est.situacion || 'Pendiente'] || situacionColorClasses.Pendiente;
+                                const riesgoStyle = riesgoColorMap[est.riesgo_color || 'gray'];
 
                                 return (
-                                <tr key={`${estudiante.estudiante_id}-${idx}`} className="hover:bg-blue-50/30 transition-colors">
-                                <td className="px-6 py-3 whitespace-nowrap">
+                                <tr key={idx} className="group hover:bg-blue-50/10 transition-colors">
+                                <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="flex items-center gap-3">
-                                        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500">
-                                            {estudiante.estudiante_nombre.charAt(0)}
+                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${est.riesgo_nivel === 'ALTO' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
+                                            E
                                         </div>
-                                        <span className="font-medium text-sm text-gray-700">
-                                            {estudiante.estudiante_nombre}
-                                        </span>
+                                        <div className="flex flex-col">
+                                            {/* ✅ TITULO ÚNICO: "Estudiante 12345" */}
+                                            <span className="font-bold text-sm text-gray-700 group-hover:text-unach-blue transition-colors">
+                                                Estudiante {est.estudiante_id}
+                                            </span>
+                                            
+                                            {est.riesgo_nivel === 'ALTO' && (
+                                                <span className="text-[9px] text-rose-500 font-bold flex items-center gap-1 mt-0.5 animate-pulse">
+                                                    <AlertCircle size={9} /> ALERTA DE RIESGO
+                                                </span>
+                                            )}
+                                        </div>
                                     </div>
                                 </td>
                                 
-                                <td className="px-6 py-3 text-center text-sm text-gray-500">
-                                    {estudiante.parcial1 !== null ? Number(estudiante.parcial1).toFixed(2) : '-'}
-                                </td>
-                                <td className="px-6 py-3 text-center text-sm text-gray-500">
-                                    {estudiante.parcial2 !== null ? Number(estudiante.parcial2).toFixed(2) : '-'}
-                                </td>
-                                <td className="px-6 py-3 text-center">
-                                    <span className={`text-sm font-bold ${estudiante.final && estudiante.final >= 7 ? 'text-unach-blue' : 'text-gray-400'}`}>
-                                        {estudiante.final !== null ? Number(estudiante.final).toFixed(2) : '-'}
+                                <td className="px-6 py-4 text-center text-sm font-medium text-gray-500">{est.parcial1 ?? '-'}</td>
+                                <td className="px-6 py-4 text-center text-sm font-medium text-gray-500">{est.parcial2 ?? '-'}</td>
+                                <td className="px-6 py-4 text-center">
+                                    <span className={`text-sm font-black ${est.final && est.final >= 7 ? 'text-unach-blue' : 'text-gray-300'}`}>
+                                        {est.final ?? '-'}
                                     </span>
                                 </td>
                                 
-                                <td className="px-6 py-3 text-center">
-                                    <span className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-full shadow-sm ${situacionColor}`}>
-                                        {estudiante.situacion || 'En Curso'}
+                                <td className="px-6 py-4 text-center">
+                                    <span className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-full border shadow-sm ${situacionColor}`}>
+                                        {est.situacion || 'En Curso'}
                                     </span>
                                 </td>
                                 
-                                <td className="px-6 py-3 text-center">
-                                    <div 
-                                        className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border ${riesgoStyle}`}
-                                        title={`Probabilidad: ${estudiante.probabilidad_riesgo || 0}%`}
-                                    >
-                                        <span className={`w-1.5 h-1.5 rounded-full ${estudiante.riesgo_color === 'red' ? 'bg-rose-500 animate-pulse' : estudiante.riesgo_color === 'yellow' ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
-                                        <span className="text-[10px] font-bold">{estudiante.riesgo_nivel?.replace('Riesgo ', '') || 'N/A'}</span>
+                                <td className="px-6 py-4 text-center">
+                                    <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border ${riesgoStyle}`} title={`Probabilidad: ${est.probabilidad_riesgo || 0}%`}>
+                                        <span className={`w-1.5 h-1.5 rounded-full ${est.riesgo_color === 'red' ? 'bg-rose-500' : est.riesgo_color === 'yellow' ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
+                                        <span className="text-[10px] font-bold uppercase">
+                                            {est.riesgo_nivel?.replace('Riesgo ', '') || 'N/A'}
+                                        </span>
                                     </div>
                                 </td>
                                 </tr>
@@ -318,15 +446,8 @@ const DashboardTutor: React.FC = () => {
                         </div>
                     </div>
                 )}
-              </div>
-            );
-          })
-        ) : (
-          <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-              <Users size={48} className="mx-auto text-gray-300 mb-3" />
-              <p className="text-gray-500 font-medium">No tienes asignaturas ni estudiantes asignados actualmente.</p>
-          </div>
-        )}
+            </div>
+        ))}
       </div>
     </div>
   );

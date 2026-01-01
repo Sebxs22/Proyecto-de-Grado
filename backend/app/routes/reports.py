@@ -39,3 +39,14 @@ def get_data_quality_report(
         raise HTTPException(status_code=403, detail="Requiere rol de coordinador")
     
     return report_service.get_data_quality_metrics(db)
+
+@router.get("/at-risk")
+def get_students_at_risk_report(db: Session = Depends(get_db)):
+    """
+    Reporte de alerta temprana: Devuelve estudiantes con riesgo alto/medio.
+    """
+    try:
+        return report_service.get_students_at_risk(db)
+    except Exception as e:
+        print(f"Error en reporte de riesgo: {e}")
+        raise HTTPException(status_code=500, detail="Error generando alertas de riesgo.")

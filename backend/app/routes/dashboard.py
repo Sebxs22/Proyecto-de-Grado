@@ -10,6 +10,8 @@ from app.services import dashboard_service
 from app.services import tutor_dashboard_service
 from app.services.cmi_service import cmi_service
 # ✅ CORREGIDO: Importar el servicio centralizado de perfiles
+# ✅ CORRECTO (Esto importa la instancia creada al final del archivo)
+from app.services.tutor_dashboard_service import tutor_dashboard_service
 from app.services.profile_service import get_student_id_by_user_email, get_tutor_id_by_user_email 
 from app.models.user import Usuario as UserModel
 from app.models.estudiante import Estudiante # <--- 1. IMPORTAR ESTO

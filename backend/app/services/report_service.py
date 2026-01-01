@@ -6,6 +6,8 @@ from typing import List, Dict, Any
 # Importamos modelos para las validaciones
 from app.models.estudiante import Estudiante
 from app.models.user import Usuario
+# ✅ NUEVA IMPORTACIÓN:
+from app.services.prediction_service import prediction_service
 
 class ReportService:
     
@@ -82,6 +84,66 @@ class ReportService:
             },
             "estado": "ÓPTIMO" if indice_global > 90 else "MEJORABLE"
         }
+    
+
+# ✅ PEGA ESTE MÉTODO AL FINAL DE LA CLASE:
+    def get_students_at_risk(self, db: Session) -> List[Dict[str, Any]]:
+        """
+        Identifica estudiantes con Riesgo MEDIO o ALTO.
+        """
+        # 1. Traemos matriculas activas con datos básicos
+        query = text("""
+            SELECT 
+                m.id as matricula_id,
+                m.estudiante_id,
+                u.nombre as estudiante_nombre,
+                e.carrera,
+                a.nombre as asignatura
+            FROM tutorias_unach.matriculas m
+            JOIN tutorias_unach.estudiantes e ON m.estudiante_id = e.id
+            JOIN tutorias_unach.usuarios u ON e.usuario_id = u.id
+            JOIN tutorias_unach.asignaturas a ON m.asignatura_id = a.id
+            -- Puedes filtrar por periodo activo si tienes esa lógica, por ahora traemos todo
+            ORDER BY u.nombre ASC
+        """)
+
+        matriculas = db.execute(query).mappings().all()
+        estudiantes_en_riesgo = []
+
+        # 2. Analizamos uno por uno con tu IA
+        for mat in matriculas:
+            try:
+                # Usamos tu servicio de predicción existente
+                prediccion = prediction_service.predict_risk(
+                    db=db, 
+                    estudiante_id=mat['estudiante_id'], 
+                    matricula_id=mat['matricula_id']
+                )
+
+                # 3. Filtramos: Solo guardamos Riesgo ALTO o MEDIO
+                if prediccion and prediccion.get('riesgo_nivel') in ['ALTO', 'MEDIO']:
+                    estudiantes_en_riesgo.append({
+                        "estudiante": mat['estudiante_nombre'],
+                        "carrera": mat['carrera'],
+                        "asignatura": mat['asignatura'],
+                        "riesgo": prediccion['riesgo_nivel'],
+                        "probabilidad": prediccion.get('probabilidad_riesgo', 0),
+                        "color": prediccion.get('riesgo_color', 'red')
+                    })
+            except Exception as e:
+                print(f"Error analizando estudiante {mat['estudiante_id']}: {e}")
+                continue
+        if not estudiantes_en_riesgo:
+                estudiantes_en_riesgo.append({
+                    "estudiante": "PRUEBA VISUAL (Verifica Datos)",
+                    "carrera": "Sistemas",
+                    "asignatura": "Debug",
+                    "riesgo": "ALTO",
+                    "probabilidad": 100.0,
+                    "color": "red"
+                })
+                # Ordenamos primero los más urgentes (ALTO)
+                return sorted(estudiantes_en_riesgo, key=lambda x: x['probabilidad'] or 0, reverse=True)
 
 # Instancia única del servicio
 report_service = ReportService()

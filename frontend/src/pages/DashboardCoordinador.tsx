@@ -22,7 +22,7 @@ import {
   CalendarRange,
   TrendingUp,
   ShieldCheck,
-  BookOpen // Icono para aprendizaje
+  BookOpen, // Icono para aprendizaje
 } from 'lucide-react';
 
 // Colores Institucionales para los gráficos
