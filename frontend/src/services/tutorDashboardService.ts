@@ -3,31 +3,32 @@
 import axiosClient from '../api/axiosClient';
 
 // --- Interfaces para tipar los datos que recibimos de la API ---
-// --- Interfaces para tipar los datos que recibimos de la API ---
-interface CursoTutor {
-  periodo: string;
-  asignatura: string;
+
+export interface CursoTutor {
+  matricula_id: number;
   estudiante_id: number;
-  codigo_estudiante: string;
-  estudiante_nombre: string;
+  estudiante_nombre: string; // ✅ Nombre real del estudiante
+  asignatura: string;
+  periodo: string;
+  
   parcial1: number | null;
   parcial2: number | null;
   final: number | null;
   situacion: string | null;
-  // ✅ INICIO DE CAMPOS AÑADIDOS
+  
+  // ✅ DATOS DE IA (Agregados para que funcionen las tarjetas)
   riesgo_nivel: string | null;
   riesgo_color: string | null;
   probabilidad_riesgo: number | null;
-  // ✅ FIN DE CAMPOS AÑADIDOS
+  mensaje_explicativo: string | null;
+  tutorias_acumuladas: number | null;
 }
 
-interface TutoriaPendiente {
-  tutoria_id: number;
-  fecha: string;
+export interface TutoriaPendiente {
+  id: number;
+  fecha_solicitada: string;
   tema: string;
-  modalidad: string;
-  estudiante_nombre: string;
-  asignatura: string;
+  estudiante: string; 
 }
 
 export interface TutorDashboard {
@@ -58,7 +59,7 @@ export const getTutorDashboard = async (): Promise<TutorDashboard> => {
 export const actualizarEstadoTutoria = async (
     tutoriaId: number, 
     estadoFinal: 'programada' | 'cancelada' | 'realizada' | 'no_asistio', 
-    enlaceReunion: string | null = null // ✅ CORREGIDO: AGREGAR ARGUMENTO OPCIONAL
+    enlaceReunion: string | null = null 
 ) => {
   try {
     const payload: { estado: string; enlace_reunion?: string } = {

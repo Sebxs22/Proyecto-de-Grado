@@ -1,12 +1,12 @@
 // frontend/src/pages/DashboardTutor.tsx
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { getTutorDashboard, TutorDashboard } from '../services/tutorDashboardService'; 
+import { getTutorDashboard, TutorDashboard, CursoTutor } from '../services/tutorDashboardService'; 
 import { Link } from 'react-router-dom';
 import { 
   TrendingUp, AlertCircle, Star, Clock, BookOpen, School, Calendar, 
   ChevronDown, ChevronUp, ArrowRightCircle, Users, 
-  Activity, BrainCircuit
+  Activity, BrainCircuit, CheckCircle
 } from 'lucide-react';
 
 const safeParseFloat = (value: number | null | undefined): number => {
@@ -15,19 +15,16 @@ const safeParseFloat = (value: number | null | undefined): number => {
     return isNaN(num) ? 0 : num;
 };
 
-// Componente Circular
+// Componente Circular (Lógica Tutor: Ver progreso de aprobación)
 const RiskCircle = ({ percent }: { percent: number }) => {
     const radius = 18;
     const circumference = 2 * Math.PI * radius;
     const offset = circumference - (percent / 100) * circumference;
     
-    // LOGICA VISUAL:
-    // < 40% = Rojo (Peligro de reprobar)
-    // 40-69% = Amarillo (En la cuerda floja)
-    // > 70% = Verde (Aprobación probable)
-    let color = 'text-rose-500'; 
-    if (percent >= 70) color = 'text-emerald-500';
-    else if (percent >= 40) color = 'text-amber-500';
+    // < 40 Rojo (Critico), < 70 Amarillo (Riesgo), > 70 Verde (Bien)
+    let color = 'text-emerald-500'; 
+    if (percent < 40) color = 'text-rose-500'; 
+    else if (percent < 70) color = 'text-amber-500';
 
     return (
         <div className="relative w-12 h-12 flex items-center justify-center">
@@ -50,7 +47,12 @@ const DashboardTutor: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedCourses, setExpandedCourses] = useState<Record<string, boolean>>({});
-  const [showAllRisks, setShowAllRisks] = useState(false);
+  
+  // Control de tarjetas de grupos
+  const [groupsOpen, setGroupsOpen] = useState({
+      critical: true, // Prioritarios abiertos por defecto
+      normal: false   // Normales cerrados para no saturar
+  });
 
   const fetchDashboardData = useCallback(async () => {
     try {
@@ -71,10 +73,14 @@ const DashboardTutor: React.FC = () => {
   const toggleCourse = (key: string) => {
       setExpandedCourses(prev => ({ ...prev, [key]: !prev[key] }));
   };
+  
+  const toggleGroup = (group: 'critical' | 'normal') => {
+      setGroupsOpen(prev => ({ ...prev, [group]: !prev[group] }));
+  };
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-screen bg-gray-50/50 text-unach-blue animate-pulse">
-      <School size={64} strokeWidth={1} className="drop-shadow-sm" />
+      <School size={64} strokeWidth={1} />
       <p className="mt-6 font-semibold text-sm tracking-widest text-gray-400">CARGANDO ECOSISTEMA DOCENTE...</p>
     </div>
   );
@@ -88,20 +94,24 @@ const DashboardTutor: React.FC = () => {
     </div>
   );
 
-  const { nombre, cursos, tutorias_pendientes, average_rating = 0.0 } = dashboardData as any;
+  const { nombre, cursos, tutorias_pendientes, average_rating = 0.0 } = dashboardData;
 
-  // 1. FILTRADO
-  const estudiantesEnRiesgo = cursos.filter((c: any) => 
-      c.riesgo_nivel === 'ALTO' || 
-      c.riesgo_nivel === 'MEDIO' || 
-      c.riesgo_nivel === 'Riesgo Alto (Finalizado)' ||
-      (c.probabilidad_riesgo && c.probabilidad_riesgo > 40)
-  ).sort((a: any, b: any) => (b.probabilidad_riesgo || 0) - (a.probabilidad_riesgo || 0));
+  // 1. FILTRADO INTELIGENTE (IA)
+  // Filtramos estudiantes que NO estén aprobados ni reprobados (solo los activos/en curso)
+  // OJO: Si 'situacion' viene null, asumimos que está en curso.
+  const estudiantesActivos = cursos.filter(c => 
+      c.situacion !== 'APROBADO' && c.situacion !== 'REPROBADO'
+  );
+  
+  // Grupo Prioritario: Probabilidad < 70%
+  const grupoPrioritario = estudiantesActivos.filter(c => (c.probabilidad_riesgo || 0) < 70)
+      .sort((a, b) => (a.probabilidad_riesgo || 0) - (b.probabilidad_riesgo || 0));
+      
+  // Grupo Normal: Probabilidad >= 70%
+  const grupoNormal = estudiantesActivos.filter(c => (c.probabilidad_riesgo || 0) >= 70);
 
-  const visibleRisks = showAllRisks ? estudiantesEnRiesgo : estudiantesEnRiesgo.slice(0, 5);
-
-  // 2. AGRUPACIÓN
-  const cursosAgrupados = cursos.reduce((acc: any, curso: any) => {
+  // 2. AGRUPACIÓN POR MATERIAS
+  const cursosAgrupados = cursos.reduce((acc: any, curso: CursoTutor) => {
     const key = `${curso.periodo} - ${curso.asignatura}`;
     if (!acc[key]) {
       acc[key] = {
@@ -114,9 +124,8 @@ const DashboardTutor: React.FC = () => {
     return acc;
   }, {});
 
-  const calcularEstadisticas = (estudiantes: any[]) => {
-    const estudiantesConNota = estudiantes.filter(e => e.final !== null);
-    const notasValidas = estudiantesConNota.map(e => safeParseFloat(e.final));
+  const calcularEstadisticas = (estudiantes: CursoTutor[]) => {
+    const notasValidas = estudiantes.filter(e => e.final !== null).map(e => safeParseFloat(e.final));
     const aprobados = estudiantes.filter(e => e.situacion === 'APROBADO').length;
     const reprobados = estudiantes.filter(e => e.situacion === 'REPROBADO').length;
     const promedioFinal = notasValidas.length > 0
@@ -125,18 +134,44 @@ const DashboardTutor: React.FC = () => {
     return { total: estudiantes.length, aprobados, reprobados, promedioFinal };
   };
 
-  const situacionColorClasses: Record<string, string> = {
-      APROBADO: 'bg-emerald-50 text-emerald-700 border border-emerald-100',
-      REPROBADO: 'bg-rose-50 text-rose-700 border border-rose-100',
-      Pendiente: 'bg-gray-50 text-gray-500 border border-gray-200',
-  };
-
-  const riesgoColorMap: Record<string, string> = {
-      red: 'text-rose-600 bg-rose-50 border-rose-200',
-      yellow: 'text-amber-600 bg-amber-50 border-amber-200',
-      green: 'text-emerald-600 bg-emerald-50 border-emerald-200',
-      gray: 'text-gray-400 bg-gray-50 border-gray-100'
-  };
+  // Helper para renderizar tabla de grupos (Tarjetas Superiores)
+  const RenderGroupList = ({ students }: { students: CursoTutor[] }) => (
+      <div className="grid grid-cols-1 divide-y divide-gray-100">
+        {students.map((est, idx) => (
+            <div key={idx} className="p-4 flex flex-col md:flex-row items-center gap-4 hover:bg-gray-50/50 transition-colors">
+                <div className="flex items-center gap-3 flex-1 min-w-[200px]">
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold bg-gray-100 text-gray-500 border border-white shadow-sm uppercase">
+                        {est.estudiante_nombre ? est.estudiante_nombre.charAt(0) : 'E'}
+                    </div>
+                    <div>
+                        <h4 className="text-sm font-bold text-gray-800">{est.estudiante_nombre}</h4>
+                        <p className="text-xs text-gray-500 font-medium flex items-center gap-1 mt-0.5">
+                            <BookOpen size={10} /> {est.asignatura}
+                        </p>
+                    </div>
+                </div>
+                <div className="flex-1 text-center md:text-left">
+                     <p className="text-xs text-gray-600 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                        {est.mensaje_explicativo || "Sin diagnóstico disponible."}
+                     </p>
+                </div>
+                <div className="flex items-center gap-6 justify-between md:justify-end w-full md:w-auto">
+                    <div className="text-center">
+                        <p className="text-[9px] font-bold text-gray-400 uppercase">Nota</p>
+                        <p className="text-sm font-black text-gray-700">{est.final ?? (est.parcial1 ?? '-')}</p>
+                    </div>
+                    <div className="text-center">
+                        <p className="text-[9px] font-bold text-gray-400 uppercase">Tutorías</p>
+                        <p className="text-sm font-black text-emerald-600">{est.tutorias_acumuladas ?? 0}</p>
+                    </div>
+                    <div className="relative w-12 h-12 flex items-center justify-center ml-2" title="Probabilidad de Aprobación">
+                        <RiskCircle percent={est.probabilidad_riesgo || 0} />
+                    </div>
+                </div>
+            </div>
+        ))}
+      </div>
+  );
 
   return (
     <div className="space-y-10 pb-16 animate-in fade-in duration-700 font-sans">
@@ -158,127 +193,68 @@ const DashboardTutor: React.FC = () => {
           <div className="hidden md:block text-right">
              <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full border border-gray-200 shadow-sm text-sm font-medium text-gray-600">
                 <Calendar size={14} className="text-unach-blue" />
-                <span>Nov 2025 - Abr 2026</span>
+                <span>Periodo Actual</span>
              </div>
           </div>
       </div>
 
-      {/* --- MÓDULO DE ALERTA TEMPRANA --- */}
-      {estudiantesEnRiesgo.length > 0 ? (
-        <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-white to-rose-50 border border-rose-100 shadow-xl shadow-rose-100/50 group">
-            <div className="absolute left-0 top-0 bottom-0 w-1.5 bg-rose-500"></div>
-            
-            <div className="p-6 md:p-8">
-                <div className="flex flex-col md:flex-row gap-6 items-start md:items-center mb-6">
-                    <div className="flex-shrink-0">
-                        <div className="relative">
-                            <div className="absolute inset-0 bg-rose-200 rounded-full blur animate-pulse"></div>
-                            <div className="relative p-4 bg-white text-rose-500 rounded-full shadow-md ring-4 ring-rose-50">
-                                <BrainCircuit size={32} strokeWidth={1.5} />
-                            </div>
-                            <div className="absolute -top-1 -right-1 bg-rose-600 text-white text-xs font-bold w-6 h-6 flex items-center justify-center rounded-full border-2 border-white shadow-sm">
-                                {estudiantesEnRiesgo.length}
-                            </div>
+      {/* --- MÓDULO DE SEGUIMIENTO (TARJETAS DE GRUPOS) --- */}
+      <div className="space-y-4">
+        
+        {/* GRUPO 1: ATENCIÓN PRIORITARIA */}
+        {/* Siempre renderizamos la tarjeta, aunque tenga 0, para mostrar que no hay riesgo */}
+        <div className={`border rounded-2xl shadow-sm overflow-hidden transition-all duration-300 ${groupsOpen.critical ? 'bg-white border-rose-200 ring-1 ring-rose-100' : 'bg-white border-gray-200'}`}>
+            <div onClick={() => toggleGroup('critical')} className="p-5 cursor-pointer flex items-center justify-between bg-gradient-to-r from-rose-50 to-white select-none">
+                <div className="flex items-center gap-4">
+                    <div className="relative">
+                        <div className="absolute inset-0 bg-rose-200 rounded-full blur animate-pulse"></div>
+                        <div className="relative p-3 bg-white text-rose-500 rounded-full shadow-sm">
+                            <BrainCircuit size={24} />
                         </div>
                     </div>
-
-                    <div className="flex-1">
-                        <h3 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                            Predicción de Riesgo Académico (IA)
-                            <span className="px-2 py-0.5 bg-rose-100 text-rose-700 text-[10px] uppercase font-bold rounded-full tracking-wider">Alta Prioridad</span>
-                        </h3>
-                        <p className="text-gray-600 mt-2 text-sm leading-relaxed">
-                            Intervención sugerida basada en <strong>Notas</strong> y <strong>Tutorías</strong>.
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-800">Atención Prioritaria (IA)</h3>
+                        <p className="text-xs text-rose-600 font-bold mt-0.5">
+                            {grupoPrioritario.length} estudiantes con probabilidad baja de aprobación
                         </p>
                     </div>
-
-                    <div className="flex-shrink-0">
-                        <Link to="/tutorias/tutor" className="group/btn inline-flex items-center gap-2 px-6 py-3 bg-rose-600 hover:bg-rose-700 text-white text-sm font-bold rounded-xl shadow-md shadow-rose-200 transition-all transform hover:-translate-y-0.5">
-                            Agendar Tutorías
-                            <ArrowRightCircle size={18} className="group-hover/btn:translate-x-1 transition-transform" />
-                        </Link>
-                    </div>
                 </div>
-
-                {/* --- LISTA DE DETALLE (TITULO UNICO: Estudiante ID) --- */}
-                <div className="bg-white rounded-xl border border-rose-100 shadow-sm overflow-hidden">
-                    <div className="grid grid-cols-1 divide-y divide-gray-100">
-                        {visibleRisks.map((est: any, idx: number) => (
-                            <div key={idx} className="p-4 flex flex-col md:flex-row items-center gap-4 hover:bg-rose-50/30 transition-colors animate-in fade-in duration-300">
-                                
-                                {/* Info Estudiante */}
-                                <div className="flex items-center gap-3 flex-1 min-w-[200px]">
-                                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold border-2 border-white shadow-sm ${est.riesgo_nivel === 'ALTO' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
-                                        E
-                                    </div>
-                                    <div>
-                                        {/* ✅ TITULO ÚNICO DIRECTO */}
-                                        <h4 className="text-sm font-bold text-gray-800">
-                                            Estudiante {est.estudiante_id}
-                                        </h4>
-                                        <p className="text-xs text-gray-500 font-medium flex items-center gap-1 mt-0.5">
-                                            <BookOpen size={10} /> {est.asignatura}
-                                        </p>
-                                    </div>
-                                </div>
-
-                                {/* Diagnóstico */}
-                                <div className="flex-1 md:border-l md:border-r border-gray-100 md:px-4 py-2 md:py-0 w-full md:w-auto">
-                                    <p className="text-xs text-gray-600 bg-gray-50 p-2 rounded-lg border border-gray-100">
-                                        <span className="font-bold text-gray-400 uppercase text-[9px] block mb-1">Diagnóstico:</span>
-                                        {est.mensaje_explicativo || "Riesgo detectado por inactividad académica."}
-                                    </p>
-                                </div>
-
-                                {/* Métricas Clave */}
-                                <div className="flex items-center gap-6 justify-between md:justify-end w-full md:w-auto">
-                                    <div className="text-center">
-                                        <p className="text-[9px] font-bold text-gray-400 uppercase">Nota</p>
-                                        <p className="text-sm font-black text-gray-700">{est.parcial1 ?? '-'}</p>
-                                    </div>
-                                    <div className="text-center">
-                                        <p className="text-[9px] font-bold text-gray-400 uppercase">Tutorías</p>
-                                        <p className={`text-sm font-black ${est.tutorias_acumuladas > 0 ? 'text-emerald-600' : 'text-gray-400'}`}>
-                                            {est.tutorias_acumuladas ?? 0}
-                                        </p>
-                                    </div>
-                                    
-                                    <div className="relative w-12 h-12 flex items-center justify-center ml-2">
-                                        <RiskCircle percent={est.probabilidad_riesgo || 0} />
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                    
-                    {/* BOTÓN VER MÁS */}
-                    {estudiantesEnRiesgo.length > 5 && (
-                        <div 
-                            onClick={() => setShowAllRisks(!showAllRisks)}
-                            className="bg-rose-50/50 p-3 text-center border-t border-rose-100 cursor-pointer hover:bg-rose-100 transition-colors group select-none"
-                        >
-                            <span className="text-xs font-bold text-rose-600 flex items-center justify-center gap-2">
-                                {showAllRisks 
-                                    ? <>Ver menos <ChevronUp size={14} /></> 
-                                    : <>Ver {estudiantesEnRiesgo.length - 5} estudiantes más <ChevronDown size={14} /></>
-                                }
-                            </span>
-                        </div>
-                    )}
+                <div className={`p-2 rounded-full transition-colors ${groupsOpen.critical ? 'bg-rose-100 text-rose-600' : 'bg-gray-50 text-gray-400'}`}>
+                    {groupsOpen.critical ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
                 </div>
             </div>
+            {groupsOpen.critical && (
+                <div className="border-t border-rose-100 bg-white">
+                    <RenderGroupList students={grupoPrioritario} />
+                </div>
+            )}
         </div>
-      ) : (
-        <div className="rounded-2xl bg-gradient-to-r from-emerald-50 to-white border border-emerald-100 p-6 flex items-center gap-4 shadow-sm">
-            <div className="p-3 bg-white text-emerald-500 rounded-full shadow-sm ring-1 ring-emerald-100">
-                <Activity size={24} />
+
+        {/* GRUPO 2: SEGUIMIENTO NORMAL */}
+        <div className={`border rounded-2xl shadow-sm overflow-hidden transition-all duration-300 ${groupsOpen.normal ? 'bg-white border-emerald-200' : 'bg-white border-gray-200'}`}>
+            <div onClick={() => toggleGroup('normal')} className="p-5 cursor-pointer flex items-center justify-between bg-white hover:bg-gray-50 transition-colors select-none">
+                <div className="flex items-center gap-4">
+                    <div className="p-3 bg-emerald-50 text-emerald-500 rounded-full shadow-sm">
+                        <CheckCircle size={24} />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-bold text-gray-800">Buen Pronóstico</h3>
+                        <p className="text-xs text-emerald-600 font-bold mt-0.5">
+                            {grupoNormal.length} estudiantes con buen rendimiento
+                        </p>
+                    </div>
+                </div>
+                <div className={`p-2 rounded-full transition-colors ${groupsOpen.normal ? 'bg-emerald-100 text-emerald-600' : 'bg-gray-50 text-gray-400'}`}>
+                    {groupsOpen.normal ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
+                </div>
             </div>
-            <div>
-                <h3 className="text-sm font-bold text-emerald-800 uppercase tracking-wide">Sin Alertas Críticas</h3>
-                <p className="text-sm text-emerald-600/80">Todos tus estudiantes mantienen un nivel de riesgo controlado.</p>
-            </div>
+            {groupsOpen.normal && (
+                <div className="border-t border-gray-100 bg-white">
+                    <RenderGroupList students={grupoNormal} />
+                </div>
+            )}
         </div>
-      )}
+      </div>
 
       {/* --- KPIS GENERALES --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -327,8 +303,8 @@ const DashboardTutor: React.FC = () => {
         </div>
       </div>
 
-      {/* --- ACORDEÓN DE ASIGNATURAS --- */}
-      <div className="space-y-6">
+      {/* --- SECCIÓN MIS ASIGNATURAS --- */}
+      <div className="space-y-6 pt-8 border-t border-gray-100">
         <div className="flex items-center gap-3 px-1">
             <div className="p-2 bg-unach-blue rounded-lg text-white shadow-md shadow-blue-200">
                 <BookOpen size={20} />
@@ -358,7 +334,7 @@ const DashboardTutor: React.FC = () => {
                     </div>
                   </div>
                   
-                  {/* MINI DASHBOARD */}
+                  {/* MINI DASHBOARD ASIGNATURA */}
                   <div className="flex items-center gap-6 text-sm">
                         <div className="text-center">
                             <p className="text-[10px] font-bold text-gray-400 uppercase">Promedio</p>
@@ -383,42 +359,43 @@ const DashboardTutor: React.FC = () => {
                             <thead className="bg-gray-50/50 text-gray-400">
                             <tr>
                                 <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest w-1/3">Estudiante</th>
+                                {/* ✅ CAMBIO: Columnas P1, P2 y Final separadas */}
                                 <th className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest">P1</th>
                                 <th className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest">P2</th>
                                 <th className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest">Final</th>
                                 <th className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest">Estado</th>
-                                <th className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest">Riesgo IA</th>
+                                <th className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest">Prob. Aprobación</th>
                             </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-50">
                             {data.estudiantes.map((est: any, idx: number) => {
-                                const situacionColor = situacionColorClasses[est.situacion || 'Pendiente'] || situacionColorClasses.Pendiente;
-                                const riesgoStyle = riesgoColorMap[est.riesgo_color || 'gray'];
-
                                 return (
                                 <tr key={idx} className="group hover:bg-blue-50/10 transition-colors">
                                 <td className="px-6 py-4 whitespace-nowrap">
                                     <div className="flex items-center gap-3">
-                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${est.riesgo_nivel === 'ALTO' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
-                                            E
+                                        <div className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-xs font-bold text-gray-500 uppercase">
+                                            {est.estudiante_nombre ? est.estudiante_nombre.charAt(0) : 'E'}
                                         </div>
                                         <div className="flex flex-col">
-                                            {/* ✅ TITULO ÚNICO: "Estudiante 12345" */}
                                             <span className="font-bold text-sm text-gray-700 group-hover:text-unach-blue transition-colors">
-                                                Estudiante {est.estudiante_id}
+                                                {est.estudiante_nombre}
                                             </span>
-                                            
-                                            {est.riesgo_nivel === 'ALTO' && (
+                                            {(est.probabilidad_riesgo || 0) < 60 && est.situacion !== 'APROBADO' && (
                                                 <span className="text-[9px] text-rose-500 font-bold flex items-center gap-1 mt-0.5 animate-pulse">
-                                                    <AlertCircle size={9} /> ALERTA DE RIESGO
+                                                    <AlertCircle size={9} /> REQUIERE ATENCIÓN
                                                 </span>
                                             )}
                                         </div>
                                     </div>
                                 </td>
                                 
-                                <td className="px-6 py-4 text-center text-sm font-medium text-gray-500">{est.parcial1 ?? '-'}</td>
-                                <td className="px-6 py-4 text-center text-sm font-medium text-gray-500">{est.parcial2 ?? '-'}</td>
+                                {/* ✅ CAMBIO: Celdas separadas */}
+                                <td className="px-6 py-4 text-center text-sm font-medium text-gray-500">
+                                    {est.parcial1 ?? '-'}
+                                </td>
+                                <td className="px-6 py-4 text-center text-sm font-medium text-gray-500">
+                                    {est.parcial2 ?? '-'}
+                                </td>
                                 <td className="px-6 py-4 text-center">
                                     <span className={`text-sm font-black ${est.final && est.final >= 7 ? 'text-unach-blue' : 'text-gray-300'}`}>
                                         {est.final ?? '-'}
@@ -426,17 +403,14 @@ const DashboardTutor: React.FC = () => {
                                 </td>
                                 
                                 <td className="px-6 py-4 text-center">
-                                    <span className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-full border shadow-sm ${situacionColor}`}>
+                                    <span className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-full border shadow-sm ${est.situacion === 'APROBADO' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
                                         {est.situacion || 'En Curso'}
                                     </span>
                                 </td>
                                 
                                 <td className="px-6 py-4 text-center">
-                                    <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border ${riesgoStyle}`} title={`Probabilidad: ${est.probabilidad_riesgo || 0}%`}>
-                                        <span className={`w-1.5 h-1.5 rounded-full ${est.riesgo_color === 'red' ? 'bg-rose-500' : est.riesgo_color === 'yellow' ? 'bg-amber-500' : 'bg-emerald-500'}`}></span>
-                                        <span className="text-[10px] font-bold uppercase">
-                                            {est.riesgo_nivel?.replace('Riesgo ', '') || 'N/A'}
-                                        </span>
+                                    <div className="flex justify-center">
+                                        <RiskCircle percent={est.probabilidad_riesgo || 0} />
                                     </div>
                                 </td>
                                 </tr>
