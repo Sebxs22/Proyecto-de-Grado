@@ -18,14 +18,18 @@ class Matricula(Base):
     estudiante_id = Column(Integer, ForeignKey("tutorias_unach.estudiantes.id"), nullable=False)
     asignatura_id = Column(Integer, ForeignKey("tutorias_unach.asignaturas.id"), nullable=False)
     periodo_id = Column(Integer, ForeignKey("tutorias_unach.periodos_academicos.id"), nullable=False)
+    
+    # ✅ CORRECCIÓN: Agregamos la columna tutor_id que faltaba
+    tutor_id = Column(Integer, ForeignKey("tutorias_unach.tutores.id"), nullable=True)
 
     # --- Relaciones Inversas ---
     estudiante = relationship("Estudiante", back_populates="matriculas")
     asignatura = relationship("Asignatura", back_populates="matriculas")
     periodo = relationship("PeriodoAcademico", back_populates="matriculas")
+    
+    # ✅ CORRECCIÓN: Relación con Tutor
+    tutor = relationship("Tutor", back_populates="matriculas")
 
     # --- Relaciones a "hijos" ---
-    # Una matrícula tiene un conjunto de notas
     notas = relationship("Nota", back_populates="matricula", uselist=False, cascade="all, delete-orphan")
-    # Una matrícula puede tener muchas tutorías asociadas
     tutorias = relationship("Tutoria", back_populates="matricula")

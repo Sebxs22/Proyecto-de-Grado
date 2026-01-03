@@ -9,7 +9,7 @@ class TutorDashboardService:
     
     def get_tutor_dashboard_data(self, db: Session, usuario_id: int) -> Dict[str, Any]:
         """
-        Obtiene dashboard del tutor (Maneja materias sin nota).
+        Obtiene dashboard del tutor OPTIMIZADO (Sin consultas N+1).
         """
         try:
             # 1. Identificar al Tutor
@@ -27,7 +27,8 @@ class TutorDashboardService:
             tutor_id = tutor['id']
             nombre_tutor = tutor['nombre']
 
-            # 2. Obtener Cursos
+            # 2. Obtener Cursos y Estudiantes (CONSULTA OPTIMIZADA)
+            # Traemos TODA la info necesaria de una sola vez, incluyendo el conteo de tutorías.
             cursos_query = text("""
                 SELECT 
                     m.id as matricula_id,
@@ -38,7 +39,13 @@ class TutorDashboardService:
                     n.parcial1 as parcial1, 
                     n.parcial2 as parcial2,
                     n.final as final,
-                    n.situacion
+                    n.situacion,
+                    (
+                        SELECT COUNT(*) 
+                        FROM tutorias_unach.tutorias t_count 
+                        WHERE t_count.matricula_id = m.id 
+                        AND t_count.estado = 'realizada'
+                    ) as num_tutorias
                 FROM tutorias_unach.matriculas m
                 JOIN tutorias_unach.asignaturas a ON m.asignatura_id = a.id
                 JOIN tutorias_unach.periodos_academicos pa ON m.periodo_id = pa.id
@@ -53,17 +60,26 @@ class TutorDashboardService:
             
             cursos_procesados = []
             
-            # 3. PROCESAR CADA ESTUDIANTE
+            # 3. PROCESAR CADA ESTUDIANTE (¡Ahora es ultrarrápido!)
             for fila in filas:
                 estudiante_dict = dict(fila)
                 estudiante_dict['asistencia'] = 100 
+                estudiante_dict['tutorias_acumuladas'] = fila['num_tutorias']
                 
+                # --- AQUÍ ESTÁ LA OPTIMIZACIÓN ---
+                # Preparamos los datos en un diccionario local
+                # Evitamos llamar a la base de datos por cada alumno
+                feats_for_ia = {
+                    "p1": float(fila['parcial1']) if fila['parcial1'] is not None else None,
+                    "p2": float(fila['parcial2']) if fila['parcial2'] is not None else None,
+                    "final": float(fila['final']) if fila['final'] is not None else None,
+                    "situacion": fila['situacion'],
+                    "tutorias": int(fila['num_tutorias'])
+                }
+
                 try:
-                    prediccion = prediction_service.predict_risk(
-                        db=db, 
-                        estudiante_id=fila['estudiante_id'],
-                        matricula_id=fila['matricula_id']
-                    )
+                    # Llamamos al método LOCAL de la IA (memoria RAM pura)
+                    prediccion = prediction_service.calculate_risk_local(feats_for_ia)
                     estudiante_dict.update(prediccion)
                 except Exception as e:
                     estudiante_dict.update({

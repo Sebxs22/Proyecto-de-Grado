@@ -16,42 +16,48 @@ class TutoriaService:
     
     def create_tutoria(self, db: Session, tutoria: TutoriaCreate, estudiante_id: int, 
                        tema_predeterminado: Optional[str] = None,
-                       modalidad_predeterminada: Optional[str] = 'Virtual'):
+                       modalidad_predeterminada: Optional[str] = 'Virtual',
+                       creado_por_tutor: bool = False): # ✅ NUEVO PARÁMETRO
         """
         Crea una nueva tutoría.
-        Ahora puede ser invocada por el estudiante (con datos completos)
-        o por el sistema (con datos automáticos).
+        - Si es estudiante: estado 'solicitada'.
+        - Si es sistema (tema_predeterminado): estado 'solicitada'.
+        - Si es tutor (creado_por_tutor): estado 'programada' (¡Autoridad!).
         """
         try:
-            # Si es una creación del sistema (automática), llenamos datos por defecto
+            # 1. Definir datos base
             if tema_predeterminado:
+                # Creación automática del sistema (Dashboard)
                 tutoria_data = {
                     "matricula_id": tutoria.matricula_id,
                     "tutor_id": tutoria.tutor_id,
-                    "fecha": datetime.now() + timedelta(days=2), # Programar para 2 días en el futuro
+                    "fecha": datetime.now() + timedelta(days=2),
                     "duracion_min": 60,
                     "tema": tema_predeterminado,
                     "modalidad": modalidad_predeterminada,
-                    "estado": "solicitada"
+                    "estado": "solicitada" 
                 }
             else:
-                # Si es del estudiante, usamos los datos del payload
+                # Creación manual (Estudiante o Tutor)
                 tutoria_data = tutoria.model_dump()
-            
-            # --- SOLUCIÓN AL PROBLEMA DE LA HORA ---
-            if 'fecha' in tutoria_data and tutoria_data['fecha'].tzinfo is not None:
+
+            # 2. Corregir zona horaria si existe (evita errores con PostgreSQL)
+            if 'fecha' in tutoria_data and tutoria_data['fecha'] and tutoria_data['fecha'].tzinfo is not None:
                 tutoria_data['fecha'] = tutoria_data['fecha'].replace(tzinfo=None)
             
-            if 'estado' not in tutoria_data or not tema_predeterminado:
-                 tutoria_data['estado'] = 'solicitada'
-            
-            # Crear la tutoría
+            # 3. Determinar Estado Inicial (AQUÍ ESTÁ LA MAGIA)
+            if creado_por_tutor:
+                tutoria_data['estado'] = 'programada' # ✅ El tutor manda, no pide permiso.
+            elif 'estado' not in tutoria_data:
+                tutoria_data['estado'] = 'solicitada' # Por defecto
+
+            # 4. Guardar en BD
             nueva_tutoria = Tutoria(**tutoria_data)
             db.add(nueva_tutoria)
             db.commit()
             db.refresh(nueva_tutoria)
             
-            # ... (el resto de la función de recarga y retorno sigue igual) ...
+            # 5. Cargar relaciones para retornar objeto completo
             tutoria_completa = db.query(Tutoria).options(
                 joinedload(Tutoria.tutor).joinedload(Tutor.usuario),
                 joinedload(Tutoria.matricula).joinedload(Matricula.estudiante).joinedload(Estudiante.usuario),

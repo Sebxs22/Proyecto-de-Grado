@@ -22,6 +22,7 @@ class PredictionService:
         return None
 
     def get_student_features(self, db: Session, matricula_id: int) -> Dict[str, Any]:
+        """Obtiene datos de la BD (Método lento para casos individuales)"""
         q_nota = text("SELECT parcial1, parcial2, final, situacion FROM tutorias_unach.notas WHERE matricula_id = :mid")
         row = db.execute(q_nota, {"mid": matricula_id}).mappings().one_or_none()
         
@@ -39,16 +40,21 @@ class PredictionService:
             "tutorias": int(tuts)
         }
 
-    def predict_risk(self, db: Session, estudiante_id: int, matricula_id: int) -> Dict[str, Any]:
-        feats = self.get_student_features(db, matricula_id)
-        p1 = feats['p1']
-        p2 = feats['p2']
-        tutorias = feats['tutorias']
+    # ✅ NUEVO MÉTODO RÁPIDO: Calcula riesgo sin ir a la BD
+    def calculate_risk_local(self, feats: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Calcula el riesgo usando datos ya cargados en memoria.
+        ¡Cero consultas a base de datos!
+        """
+        p1 = feats.get('p1')
+        p2 = feats.get('p2')
+        tutorias = feats.get('tutorias', 0)
+        situacion = feats.get('situacion')
 
-        # 1. CERTEZA ABSOLUTA (BD)
-        if feats['situacion'] == 'APROBADO':
+        # 1. CERTEZA ABSOLUTA
+        if situacion == 'APROBADO':
             return self._response(100.0, "green", "ALTO", "Materia aprobada oficialmente.", feats)
-        if feats['situacion'] == 'REPROBADO':
+        if situacion == 'REPROBADO':
             return self._response(0.0, "red", "BAJO", "Materia reprobada oficialmente.", feats)
 
         # 2. CERTEZA MATEMÁTICA (Dos Notas)
@@ -59,7 +65,7 @@ class PredictionService:
             else:
                  return self._response(0.0, "red", "BAJO", "Promedio insuficiente.", feats)
 
-        # 3. PREDICCIÓN (Falta Parcial 2)
+        # 3. PREDICCIÓN CON IA (Falta Parcial 2)
         if p1 is not None and p2 is None:
             if not self.model:
                 return self._response(0.0, "gray", "ERROR", "IA no disponible.", feats)
@@ -72,12 +78,9 @@ class PredictionService:
                 prob_raw = self.model.predict_proba(features_df)[0][1] * 100
                 
                 # --- REGLA DEL SUPER ESTUDIANTE ---
-                # Si tiene nota de Excelencia (>=8) Y se esfuerza (>=5 tutorías)
-                # Le permitimos llegar al 99.9%
                 if p1 >= 8.0 and tutorias >= 5:
-                    prob = min(prob_raw, 99.9) # Casi 100, la gloria.
+                    prob = max(prob_raw, 99.9) 
                 else:
-                    # Para el resto, mantenemos la cautela del 98%
                     prob = min(prob_raw, 98.0)
 
                 # Piso mínimo de esperanza
@@ -103,8 +106,13 @@ class PredictionService:
 
         return self._response(0.0, "gray", "N/D", "Sin calificaciones.", feats)
 
+    # Mantiene compatibilidad con el método viejo (por si acaso)
+    def predict_risk(self, db: Session, estudiante_id: int, matricula_id: int) -> Dict[str, Any]:
+        feats = self.get_student_features(db, matricula_id)
+        return self.calculate_risk_local(feats)
+
     def get_student_clusters(self, db: Session, periodo_id: int) -> List[Dict[str, Any]]:
-        # Clustering sin cambios
+        # ... (Código de clusters se mantiene igual) ...
         try:
             q = text("""
                 SELECT u.nombre, n.parcial1, n.parcial2, 
@@ -134,7 +142,11 @@ class PredictionService:
 
     def _response(self, prob, color, nivel, msg, feats):
         nota = feats['p1'] if feats['p1'] is not None else 0.0
-        if feats['p2'] is not None: nota = (feats['p1'] + feats['p2']) / 2
+        # Mostrar la nota que tenga (Final > Promedio > P1)
+        if feats.get('final') is not None:
+             nota = feats['final']
+        elif feats['p2'] is not None: 
+             nota = (feats['p1'] + feats['p2']) / 2
             
         return {
             "riesgo_nivel": nivel,

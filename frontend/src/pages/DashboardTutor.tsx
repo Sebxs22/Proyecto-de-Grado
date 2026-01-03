@@ -2,12 +2,16 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import { getTutorDashboard, TutorDashboard, CursoTutor } from '../services/tutorDashboardService'; 
+import AgendarCitaModal from '../components/AgendarCitaModal'; 
+import DashboardSkeleton from '../components/DashboardSkeleton';
 import { Link } from 'react-router-dom';
 import { 
-  TrendingUp, AlertCircle, Star, Clock, BookOpen, School, Calendar, 
+  TrendingUp, AlertCircle, Star, Clock, BookOpen, Calendar, 
   ChevronDown, ChevronUp, ArrowRightCircle, Users, 
   Activity, BrainCircuit, CheckCircle
 } from 'lucide-react';
+
+const CACHE_KEY = 'tutor_dashboard_v1'; // Clave para guardar en memoria
 
 const safeParseFloat = (value: number | null | undefined): number => {
     if (value === null || value === undefined) return 0;
@@ -15,19 +19,18 @@ const safeParseFloat = (value: number | null | undefined): number => {
     return isNaN(num) ? 0 : num;
 };
 
-// Componente Circular (Lógica Tutor: Ver progreso de aprobación)
+// Componente Circular
 const RiskCircle = ({ percent }: { percent: number }) => {
     const radius = 18;
     const circumference = 2 * Math.PI * radius;
     const offset = circumference - (percent / 100) * circumference;
     
-    // < 40 Rojo (Critico), < 70 Amarillo (Riesgo), > 70 Verde (Bien)
     let color = 'text-emerald-500'; 
     if (percent < 40) color = 'text-rose-500'; 
     else if (percent < 70) color = 'text-amber-500';
 
     return (
-        <div className="relative w-12 h-12 flex items-center justify-center">
+        <div className="relative w-12 h-12 flex items-center justify-center group">
             <svg className="w-full h-full transform -rotate-90">
                 <circle cx="24" cy="24" r={radius} stroke="#f3f4f6" strokeWidth="4" fill="transparent" />
                 <circle cx="24" cy="24" r={radius} stroke="currentColor" strokeWidth="4" fill="transparent" 
@@ -43,32 +46,48 @@ const RiskCircle = ({ percent }: { percent: number }) => {
 };
 
 const DashboardTutor: React.FC = () => {
-  const [dashboardData, setDashboardData] = useState<TutorDashboard | null>(null);
-  const [loading, setLoading] = useState(true);
+  // 1. INICIALIZACIÓN HÍBRIDA (Busca en caché al nacer)
+  const [dashboardData, setDashboardData] = useState<TutorDashboard | null>(() => {
+      const cached = localStorage.getItem(CACHE_KEY);
+      return cached ? JSON.parse(cached) : null;
+  });
+
+  // Solo mostramos 'loading' si NO hay nada en caché
+  const [loading, setLoading] = useState(!dashboardData);
   const [error, setError] = useState<string | null>(null);
   const [expandedCourses, setExpandedCourses] = useState<Record<string, boolean>>({});
   
-  // Control de tarjetas de grupos
+  const [isCitaModalOpen, setIsCitaModalOpen] = useState(false);
+  const [citaStudentData, setCitaStudentData] = useState<{id: number, nombre: string} | null>(null);
+
   const [groupsOpen, setGroupsOpen] = useState({
-      critical: true, // Prioritarios abiertos por defecto
-      normal: false   // Normales cerrados para no saturar
+      critical: true, 
+      normal: false   
   });
 
   const fetchDashboardData = useCallback(async () => {
     try {
-      setLoading(true);
+      // NOTA: No ponemos setLoading(true) aquí para evitar parpadeos si ya estamos viendo datos viejos
       const data = await getTutorDashboard();
+      
       setDashboardData(data);
+      // Guardamos en caché lo nuevo para la próxima vez
+      localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+      
       setError(null);
     } catch (err) {
       console.error("Error dashboard:", err);
-      setError('No se pudo cargar la información.');
+      // Solo mostramos error si no tenemos datos antiguos que mostrar
+      if (!dashboardData) setError('No se pudo cargar la información.');
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [dashboardData]);
 
-  useEffect(() => { fetchDashboardData(); }, [fetchDashboardData]);
+  useEffect(() => { 
+      // Llamada silenciosa en segundo plano para actualizar datos
+      fetchDashboardData(); 
+  }, [fetchDashboardData]);
 
   const toggleCourse = (key: string) => {
       setExpandedCourses(prev => ({ ...prev, [key]: !prev[key] }));
@@ -78,12 +97,13 @@ const DashboardTutor: React.FC = () => {
       setGroupsOpen(prev => ({ ...prev, [group]: !prev[group] }));
   };
 
-  if (loading) return (
-    <div className="flex flex-col items-center justify-center h-screen bg-gray-50/50 text-unach-blue animate-pulse">
-      <School size={64} strokeWidth={1} />
-      <p className="mt-6 font-semibold text-sm tracking-widest text-gray-400">CARGANDO ECOSISTEMA DOCENTE...</p>
-    </div>
-  );
+  const handleOpenCita = (matriculaId: number, nombreEstudiante: string, e: React.MouseEvent) => {
+      e.stopPropagation(); 
+      setCitaStudentData({ id: matriculaId, nombre: nombreEstudiante });
+      setIsCitaModalOpen(true);
+  };
+
+  if (loading) return <DashboardSkeleton />;
 
   if (error || !dashboardData) return (
     <div className="flex justify-center items-center h-96">
@@ -96,30 +116,14 @@ const DashboardTutor: React.FC = () => {
 
   const { nombre, cursos, tutorias_pendientes, average_rating = 0.0 } = dashboardData;
 
-  // 1. FILTRADO INTELIGENTE (IA)
-  // Filtramos estudiantes que NO estén aprobados ni reprobados (solo los activos/en curso)
-  // OJO: Si 'situacion' viene null, asumimos que está en curso.
-  const estudiantesActivos = cursos.filter(c => 
-      c.situacion !== 'APROBADO' && c.situacion !== 'REPROBADO'
-  );
-  
-  // Grupo Prioritario: Probabilidad < 70%
+  const estudiantesActivos = cursos.filter(c => c.situacion !== 'APROBADO' && c.situacion !== 'REPROBADO');
   const grupoPrioritario = estudiantesActivos.filter(c => (c.probabilidad_riesgo || 0) < 70)
       .sort((a, b) => (a.probabilidad_riesgo || 0) - (b.probabilidad_riesgo || 0));
-      
-  // Grupo Normal: Probabilidad >= 70%
   const grupoNormal = estudiantesActivos.filter(c => (c.probabilidad_riesgo || 0) >= 70);
 
-  // 2. AGRUPACIÓN POR MATERIAS
   const cursosAgrupados = cursos.reduce((acc: any, curso: CursoTutor) => {
     const key = `${curso.periodo} - ${curso.asignatura}`;
-    if (!acc[key]) {
-      acc[key] = {
-        periodo: curso.periodo,
-        asignatura: curso.asignatura,
-        estudiantes: []
-      };
-    }
+    if (!acc[key]) acc[key] = { periodo: curso.periodo, asignatura: curso.asignatura, estudiantes: [] };
     acc[key].estudiantes.push(curso);
     return acc;
   }, {});
@@ -134,12 +138,14 @@ const DashboardTutor: React.FC = () => {
     return { total: estudiantes.length, aprobados, reprobados, promedioFinal };
   };
 
-  // Helper para renderizar tabla de grupos (Tarjetas Superiores)
   const RenderGroupList = ({ students }: { students: CursoTutor[] }) => (
       <div className="grid grid-cols-1 divide-y divide-gray-100">
-        {students.map((est, idx) => (
+        {students.map((est, idx) => {
+            const isBlocked = est.situacion === 'APROBADO' || est.situacion === 'REPROBADO';
+            return (
             <div key={idx} className="p-4 flex flex-col md:flex-row items-center gap-4 hover:bg-gray-50/50 transition-colors">
-                <div className="flex items-center gap-3 flex-1 min-w-[200px]">
+                
+                <div className="flex items-center gap-3 flex-1 min-w-[220px]">
                     <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold bg-gray-100 text-gray-500 border border-white shadow-sm uppercase">
                         {est.estudiante_nombre ? est.estudiante_nombre.charAt(0) : 'E'}
                     </div>
@@ -150,30 +156,51 @@ const DashboardTutor: React.FC = () => {
                         </p>
                     </div>
                 </div>
-                <div className="flex-1 text-center md:text-left">
-                     <p className="text-xs text-gray-600 bg-gray-50 p-2 rounded-lg border border-gray-100">
+
+                <div className="flex-1 text-center md:text-left w-full">
+                     <p className="text-xs text-gray-600 bg-gray-50 p-2 rounded-lg border border-gray-100 truncate">
                         {est.mensaje_explicativo || "Sin diagnóstico disponible."}
                      </p>
                 </div>
-                <div className="flex items-center gap-6 justify-between md:justify-end w-full md:w-auto">
-                    <div className="text-center">
+
+                <div className="flex items-center justify-between gap-4 w-full md:w-auto mt-2 md:mt-0">
+                    <div className="text-center px-2">
                         <p className="text-[9px] font-bold text-gray-400 uppercase">Nota</p>
                         <p className="text-sm font-black text-gray-700">{est.final ?? (est.parcial1 ?? '-')}</p>
                     </div>
-                    <div className="text-center">
+
+                    <div className="text-center px-2 border-l border-gray-100">
                         <p className="text-[9px] font-bold text-gray-400 uppercase">Tutorías</p>
-                        <p className="text-sm font-black text-emerald-600">{est.tutorias_acumuladas ?? 0}</p>
+                        <p className="text-sm font-black text-indigo-600">{est.tutorias_acumuladas ?? 0}</p>
                     </div>
-                    <div className="relative w-12 h-12 flex items-center justify-center ml-2" title="Probabilidad de Aprobación">
+
+                    <div className="flex flex-col items-center px-2 border-l border-gray-100">
+                        <p className="text-[9px] font-bold text-gray-400 uppercase mb-1">Éxito</p>
                         <RiskCircle percent={est.probabilidad_riesgo || 0} />
+                    </div>
+
+                    <div className="pl-2 border-l border-gray-100">
+                        <button 
+                            onClick={(e) => !isBlocked && handleOpenCita(est.matricula_id, est.estudiante_nombre, e)}
+                            disabled={isBlocked}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1 transition-all border shadow-sm
+                                ${isBlocked 
+                                    ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed opacity-50' 
+                                    : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 hover:shadow-md'}`}
+                            title={isBlocked ? "Estudiante finalizó materia" : "Citar obligatoriamente"}
+                        >
+                            <Calendar size={14} /> 
+                            <span className="hidden md:inline">Citar</span>
+                        </button>
                     </div>
                 </div>
             </div>
-        ))}
+        )})}
       </div>
   );
 
   return (
+    <>
     <div className="space-y-10 pb-16 animate-in fade-in duration-700 font-sans">
       
       {/* HEADER */}
@@ -198,11 +225,9 @@ const DashboardTutor: React.FC = () => {
           </div>
       </div>
 
-      {/* --- MÓDULO DE SEGUIMIENTO (TARJETAS DE GRUPOS) --- */}
+      {/* --- TARJETAS GRUPOS --- */}
       <div className="space-y-4">
         
-        {/* GRUPO 1: ATENCIÓN PRIORITARIA */}
-        {/* Siempre renderizamos la tarjeta, aunque tenga 0, para mostrar que no hay riesgo */}
         <div className={`border rounded-2xl shadow-sm overflow-hidden transition-all duration-300 ${groupsOpen.critical ? 'bg-white border-rose-200 ring-1 ring-rose-100' : 'bg-white border-gray-200'}`}>
             <div onClick={() => toggleGroup('critical')} className="p-5 cursor-pointer flex items-center justify-between bg-gradient-to-r from-rose-50 to-white select-none">
                 <div className="flex items-center gap-4">
@@ -230,7 +255,6 @@ const DashboardTutor: React.FC = () => {
             )}
         </div>
 
-        {/* GRUPO 2: SEGUIMIENTO NORMAL */}
         <div className={`border rounded-2xl shadow-sm overflow-hidden transition-all duration-300 ${groupsOpen.normal ? 'bg-white border-emerald-200' : 'bg-white border-gray-200'}`}>
             <div onClick={() => toggleGroup('normal')} className="p-5 cursor-pointer flex items-center justify-between bg-white hover:bg-gray-50 transition-colors select-none">
                 <div className="flex items-center gap-4">
@@ -359,16 +383,17 @@ const DashboardTutor: React.FC = () => {
                             <thead className="bg-gray-50/50 text-gray-400">
                             <tr>
                                 <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest w-1/3">Estudiante</th>
-                                {/* ✅ CAMBIO: Columnas P1, P2 y Final separadas */}
                                 <th className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest">P1</th>
                                 <th className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest">P2</th>
                                 <th className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest">Final</th>
                                 <th className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest">Estado</th>
+                                <th className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest">Acción</th>
                                 <th className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest">Prob. Aprobación</th>
                             </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-50">
                             {data.estudiantes.map((est: any, idx: number) => {
+                                const isBlocked = est.situacion === 'APROBADO' || est.situacion === 'REPROBADO';
                                 return (
                                 <tr key={idx} className="group hover:bg-blue-50/10 transition-colors">
                                 <td className="px-6 py-4 whitespace-nowrap">
@@ -389,23 +414,28 @@ const DashboardTutor: React.FC = () => {
                                     </div>
                                 </td>
                                 
-                                {/* ✅ CAMBIO: Celdas separadas */}
-                                <td className="px-6 py-4 text-center text-sm font-medium text-gray-500">
-                                    {est.parcial1 ?? '-'}
-                                </td>
-                                <td className="px-6 py-4 text-center text-sm font-medium text-gray-500">
-                                    {est.parcial2 ?? '-'}
-                                </td>
-                                <td className="px-6 py-4 text-center">
-                                    <span className={`text-sm font-black ${est.final && est.final >= 7 ? 'text-unach-blue' : 'text-gray-300'}`}>
-                                        {est.final ?? '-'}
-                                    </span>
-                                </td>
-                                
+                                <td className="px-6 py-4 text-center text-sm font-medium text-gray-500">{est.parcial1 ?? '-'}</td>
+                                <td className="px-6 py-4 text-center text-sm font-medium text-gray-500">{est.parcial2 ?? '-'}</td>
+                                <td className="px-6 py-4 text-center"><span className={`text-sm font-black ${est.final && est.final >= 7 ? 'text-unach-blue' : 'text-gray-300'}`}>{est.final ?? '-'}</span></td>
                                 <td className="px-6 py-4 text-center">
                                     <span className={`px-2.5 py-1 text-[10px] font-bold uppercase rounded-full border shadow-sm ${est.situacion === 'APROBADO' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
                                         {est.situacion || 'En Curso'}
                                     </span>
+                                </td>
+
+                                {/* BOTÓN CITAR TABLA INFERIOR */}
+                                <td className="px-6 py-4 text-center">
+                                    <button 
+                                        onClick={(e) => !isBlocked && handleOpenCita(est.matricula_id, est.estudiante_nombre, e)}
+                                        disabled={isBlocked}
+                                        className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border shadow-sm
+                                            ${isBlocked 
+                                                ? 'bg-gray-100 text-gray-400 border-gray-200 cursor-not-allowed shadow-none' 
+                                                : 'bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100 hover:shadow-md'}`}
+                                        title={isBlocked ? "No disponible" : "Programar sesión"}
+                                    >
+                                        <Calendar size={12} /> Citar
+                                    </button>
                                 </td>
                                 
                                 <td className="px-6 py-4 text-center">
@@ -424,6 +454,15 @@ const DashboardTutor: React.FC = () => {
         ))}
       </div>
     </div>
+    
+    <AgendarCitaModal 
+        isOpen={isCitaModalOpen}
+        onClose={() => setIsCitaModalOpen(false)}
+        matriculaId={citaStudentData?.id || null}
+        estudianteNombre={citaStudentData?.nombre || null}
+        onSuccess={() => { fetchDashboardData(); }}
+    />
+    </>
   );
 };
 
