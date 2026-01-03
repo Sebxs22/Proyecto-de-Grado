@@ -15,34 +15,53 @@ import {
   ChevronRight,
   ChevronDown,
   ChevronUp,
-  Archive
+  Archive,
+  Info
 } from 'lucide-react';
 
-// --- COMPONENTE VISUAL: CÍRCULO DE PROBABILIDAD (La "Ruedita") ---
-const RiskCircle = ({ percent }: { percent: number }) => {
+// --- COMPONENTE VISUAL: CÍRCULO DE PROBABILIDAD (Con Tooltip de IA) ---
+const RiskCircle = ({ percent, message }: { percent: number, message?: string }) => {
     const radius = 18;
     const circumference = 2 * Math.PI * radius;
     const offset = circumference - (percent / 100) * circumference;
     
-    // Lógica de colores: Rojo (<40%), Amarillo (40-69%), Verde (>=70%)
+    // Lógica de colores: Rojo (<50%), Amarillo (50-79%), Verde (>=80%)
     let color = 'text-emerald-500'; 
-    if (percent < 40) color = 'text-rose-500'; 
-    else if (percent < 70) color = 'text-amber-500';
+    let bgColor = 'bg-emerald-50';
+    
+    if (percent < 50) { 
+        color = 'text-rose-500'; 
+        bgColor = 'bg-rose-50';
+    }
+    else if (percent < 80) { 
+        color = 'text-amber-500'; 
+        bgColor = 'bg-amber-50';
+    }
 
     return (
-        <div className="relative w-12 h-12 flex items-center justify-center group cursor-help">
-            {/* Fondo gris claro */}
-            <svg className="w-full h-full transform -rotate-90">
-                <circle cx="24" cy="24" r={radius} stroke="#f3f4f6" strokeWidth="4" fill="transparent" />
-                {/* Círculo de progreso dinámico */}
-                <circle cx="24" cy="24" r={radius} stroke="currentColor" strokeWidth="4" fill="transparent" 
-                    strokeDasharray={circumference} 
-                    strokeDashoffset={offset} 
-                    strokeLinecap="round"
-                    className={`${color} transition-all duration-1000 ease-out`} 
-                />
-            </svg>
-            <span className={`absolute text-[10px] font-bold ${color}`}>{Math.round(percent)}%</span>
+        <div className="group relative flex flex-col items-center">
+            {/* El Círculo */}
+            <div className={`relative w-12 h-12 flex items-center justify-center rounded-full ${bgColor} cursor-help transition-transform hover:scale-105`}>
+                <svg className="w-full h-full transform -rotate-90">
+                    <circle cx="24" cy="24" r={radius} stroke="#e5e7eb" strokeWidth="4" fill="transparent" />
+                    <circle cx="24" cy="24" r={radius} stroke="currentColor" strokeWidth="4" fill="transparent" 
+                        strokeDasharray={circumference} 
+                        strokeDashoffset={offset} 
+                        strokeLinecap="round"
+                        className={`${color} transition-all duration-1000 ease-out`} 
+                    />
+                </svg>
+                <span className={`absolute text-[10px] font-black ${color}`}>{Math.round(percent)}%</span>
+            </div>
+            
+            {/* Tooltip con el mensaje de la IA (Aparece al pasar el mouse) */}
+            {message && (
+                <div className="absolute bottom-full mb-2 w-48 p-2 bg-gray-800 text-white text-[10px] rounded-lg shadow-lg opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 text-center">
+                    {message}
+                    {/* Triangulito del tooltip */}
+                    <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-800"></div>
+                </div>
+            )}
         </div>
     );
 };
@@ -74,13 +93,13 @@ const DashboardEstudiante: React.FC = () => {
         setDashboardData(dashboard);
         setTutoriasProgramadas(tutorias.filter(t => t.estado === 'programada'));
         
-        // Alertas de riesgo
+        // Alertas de riesgo (IA)
         const enRiesgo = dashboard.historial_academico
           .filter(m => (m.probabilidad_riesgo || 0) < 60 && m.situacion !== 'APROBADO' && m.situacion !== 'REPROBADO')
           .map(m => m.asignatura);
         setMateriasEnRiesgo(enRiesgo);
         
-        // Auto-apertura de periodos
+        // Auto-apertura de periodos (abre el actual)
         const grupos: Record<string, HistorialAcademico[]> = {};
         dashboard.historial_academico.forEach(m => {
             if (!grupos[m.periodo]) grupos[m.periodo] = [];
@@ -173,18 +192,18 @@ const DashboardEstudiante: React.FC = () => {
             </div>
         </div>
 
-        {/* AVISOS / ALERTAS */}
+        {/* AVISOS / ALERTAS IA */}
         <div className="grid grid-cols-1 gap-4">
             {materiasEnRiesgo.length > 0 && (
             <div className="bg-gradient-to-r from-rose-50 to-white border-l-4 border-rose-500 p-5 rounded-r-xl shadow-sm flex items-start gap-4 transition-all hover:shadow-md cursor-default">
-                <div className="p-2 bg-white rounded-full text-rose-500 shadow-sm">
+                <div className="p-2 bg-white rounded-full text-rose-500 shadow-sm animate-pulse">
                     <AlertTriangle size={24} />
                 </div>
                 <div>
-                    <p className="font-black text-gray-800 text-lg">Alerta de Rendimiento</p>
+                    <p className="font-black text-gray-800 text-lg">Modelo IA: Alerta de Rendimiento</p>
                     <p className="text-sm text-gray-600 mt-1 leading-relaxed">
-                        Probabilidad baja en: <span className="font-bold text-rose-600">{materiasEnRiesgo.join(', ')}</span>.
-                        <br/>Agenda una tutoría para mejorar tu pronóstico.
+                        Se ha detectado probabilidad baja en: <span className="font-bold text-rose-600">{materiasEnRiesgo.join(', ')}</span>.
+                        <br/>Agenda una tutoría hoy mismo para mejorar tu pronóstico.
                     </p>
                 </div>
             </div>
@@ -254,10 +273,19 @@ const DashboardEstudiante: React.FC = () => {
 
             {Object.entries(materiasPorPeriodo).map(([periodo, materias]) => {
                 const isOpen = expandedPeriods[periodo];
-                const notasFinales = materias.map(m => m.final).filter(n => n !== null) as number[];
+
+                // --- CORRECCIÓN ROBUSTA: "Todoterreno" (Con fix de TypeScript) ---
+                const notasFinales = materias
+                    .map(m => m.final)
+                    // (n as any) engaña a TS para que permita comparar number con ''
+                    .filter(n => n !== null && n !== undefined && (n as any) !== '') 
+                    .map(n => Number(n)) 
+                    .filter(n => !isNaN(n)); 
+
                 const promedioPeriodo = notasFinales.length > 0 
                     ? (notasFinales.reduce((a, b) => a + b, 0) / notasFinales.length).toFixed(2) 
                     : '-';
+                // -----------------------------------------------------------------
 
                 return (
                     <div key={periodo} className={`bg-white border rounded-2xl shadow-sm overflow-hidden transition-all duration-300 ${isOpen ? 'border-blue-200 shadow-md' : 'border-gray-200 hover:border-blue-300'}`}>
@@ -285,12 +313,15 @@ const DashboardEstudiante: React.FC = () => {
                                         <thead className="bg-gray-50/50 text-gray-400">
                                             <tr>
                                                 <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest w-1/3">Asignatura</th>
-                                                {/* ✅ CORRECCIÓN: Separamos las columnas P1 y P2 en el encabezado */}
                                                 <th className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest">P1</th>
                                                 <th className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest">P2</th>
                                                 <th className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest">Final</th>
                                                 <th className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest">Estado</th>
-                                                <th className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest">Prob. Aprobación</th>
+                                                <th className="px-6 py-4 text-center text-[10px] font-bold uppercase tracking-widest text-unach-blue">
+                                                    <span className="flex items-center justify-center gap-1">
+                                                        Prob. Éxito (IA) <Info size={12} />
+                                                    </span>
+                                                </th>
                                                 <th className="px-6 py-4 text-right text-[10px] font-bold uppercase tracking-widest">Acción</th>
                                             </tr>
                                         </thead>
@@ -298,7 +329,6 @@ const DashboardEstudiante: React.FC = () => {
                                             {materias.map((materia, index) => {
                                                 const situacionKey = (materia.situacion || 'Pendiente') as keyof typeof situacionColorClasses;
                                                 const situacionColor = situacionColorClasses[situacionKey] || situacionColorClasses.DEFAULT;
-                                                // Bloquear si no hay tutor (null) o si ya aprobó
                                                 const isBlocked = !materia.tutor_id || materia.situacion === 'APROBADO';
 
                                                 return (
@@ -309,7 +339,6 @@ const DashboardEstudiante: React.FC = () => {
                                                                 <span className="text-[10px] text-gray-400 font-bold mt-1 uppercase">Tutor: {materia.tutor_nombre || 'No asignado'}</span>
                                                             </div>
                                                         </td>
-                                                        {/* ✅ CORRECCIÓN: Separamos los datos P1 y P2 en dos celdas */}
                                                         <td className="px-6 py-4 text-center text-sm font-medium text-gray-500">
                                                             {materia.parcial1 ?? '-'}
                                                         </td>
@@ -327,9 +356,12 @@ const DashboardEstudiante: React.FC = () => {
                                                             </span>
                                                         </td>
                                                         <td className="px-6 py-4 text-center">
-                                                            {/* Ruedita de Probabilidad sin Tooltip complejo */}
-                                                            <div className="flex justify-center" title="Probabilidad de éxito">
-                                                                <RiskCircle percent={materia.probabilidad_riesgo || 0} />
+                                                            {/* CÍRCULO CON TOOLTIP INTELIGENTE */}
+                                                            <div className="flex justify-center">
+                                                                <RiskCircle 
+                                                                    percent={materia.probabilidad_riesgo || 0} 
+                                                                    message={materia.mensaje_explicativo || 'Análisis no disponible'} 
+                                                                />
                                                             </div>
                                                         </td>
                                                         <td className="px-6 py-4 text-right">
@@ -337,7 +369,7 @@ const DashboardEstudiante: React.FC = () => {
                                                                 onClick={() => handleAgendarClick(materia.matricula_id, materia.tutor_id, materia.tutor_nombre)} 
                                                                 className="group/btn inline-flex items-center gap-2 px-3 py-1.5 bg-white border border-gray-200 rounded-lg text-xs font-bold text-gray-600 hover:border-unach-blue hover:text-unach-blue hover:shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                                                                 disabled={isBlocked}
-                                                                title={isBlocked ? "No disponible (Sin tutor o Aprobada)" : "Agendar Tutoría"}
+                                                                title={isBlocked ? "No disponible" : "Agendar Tutoría"}
                                                             >
                                                                 Agendar <Clock size={12} className="text-gray-400 group-hover/btn:text-unach-blue" />
                                                             </button>

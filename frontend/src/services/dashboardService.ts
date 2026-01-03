@@ -2,13 +2,12 @@
 
 import axiosClient from '../api/axiosClient';
 
-// Definimos las "interfaces" o contratos de los datos que esperamos
+// Definimos las interfaces de los datos que esperamos del backend
 interface KpiData {
     promedio_general: number;
     total_materias: number;
 }
 
-// ✅ INTERFAZ ACTUALIZADA
 export interface HistorialAcademico {
     asignatura: string;
     periodo: string;
@@ -17,12 +16,13 @@ export interface HistorialAcademico {
     final: number | null;
     situacion: string | null;
 
-    // Se cambiaron a 'string' para aceptar 'N/A' y 'gray'
+    // Campos de la IA
     riesgo_nivel: string | null; 
     riesgo_color: string | null;
-    
-    // ✅ AÑADIDO: La propiedad que faltaba y causaba el error
     probabilidad_riesgo: number | null; 
+    
+    // ✅ ESTA ES LA LÍNEA QUE FALTABA
+    mensaje_explicativo: string | null;
 
     matricula_id: number;
     tutor_id: number;
@@ -39,7 +39,6 @@ export interface StudentDashboard {
 export const getStudentDashboard = async (): Promise<StudentDashboard> => {
     try {
         const response = await axiosClient.get('/dashboard/student');
-        console.log("Datos recibidos del backend:", response.data); // Para debug
         return response.data;
     } catch (error) {
         console.error("Error al obtener el dashboard del estudiante:", error);
