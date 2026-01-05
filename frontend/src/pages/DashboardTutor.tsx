@@ -12,7 +12,7 @@ import {
   Activity, BrainCircuit, CheckCircle, Download, FileSpreadsheet
 } from 'lucide-react';
 
-const CACHE_KEY = 'tutor_dashboard_v1'; 
+// ELIMINADO: const CACHE_KEY = 'tutor_dashboard_v1'; (Causante del bug de "Castro")
 
 const safeParseFloat = (value: number | null | undefined): number => {
     if (value === null || value === undefined) return 0;
@@ -47,12 +47,11 @@ const RiskCircle = ({ percent }: { percent: number }) => {
 };
 
 const DashboardTutor: React.FC = () => {
-  const [dashboardData, setDashboardData] = useState<TutorDashboard | null>(() => {
-      const cached = localStorage.getItem(CACHE_KEY);
-      return cached ? JSON.parse(cached) : null;
-  });
+  // CORRECCIÓN 1: Inicializar siempre en null para obligar a cargar datos frescos del usuario actual.
+  // Esto soluciona que aparezca el usuario anterior (ej. Castro).
+  const [dashboardData, setDashboardData] = useState<TutorDashboard | null>(null);
 
-  const [loading, setLoading] = useState(!dashboardData);
+  const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [expandedCourses, setExpandedCourses] = useState<Record<string, boolean>>({});
   
@@ -64,27 +63,31 @@ const DashboardTutor: React.FC = () => {
       normal: false   
   });
 
+  // CORRECCIÓN 2: Dependencias vacías [] para que la función sea estable y no dependa de dashboardData.
   const fetchDashboardData = useCallback(async () => {
     try {
+      setLoading(true); // Asegurar loading visual
       const data = await getTutorDashboard();
       setDashboardData(data);
-      localStorage.setItem(CACHE_KEY, JSON.stringify(data));
+      // ELIMINADO: localStorage.setItem... para evitar datos estancados.
       setError(null);
     } catch (err) {
       console.error("Error dashboard:", err);
-      if (!dashboardData) setError('No se pudo cargar la información.');
+      // Solo mostramos error si no hay datos previos
+      setDashboardData(null); 
+      setError('No se pudo cargar la información actualizada.');
     } finally {
       setLoading(false);
     }
-  }, [dashboardData]);
+  }, []); 
 
+  // Al montar el componente, cargamos los datos.
   useEffect(() => { 
       fetchDashboardData(); 
   }, [fetchDashboardData]);
 
   /**
    * FUNCIÓN GENERICA PARA EXPORTAR EXCEL
-   * Recibe los datos a exportar y el nombre sugerido del archivo.
    */
   const exportarExcel = (cursosData: CursoTutor[], nombreArchivo: string) => {
     if (!cursosData || cursosData.length === 0) return;
@@ -106,7 +109,6 @@ const DashboardTutor: React.FC = () => {
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Reporte");
 
-    // Ajuste de columnas visual
     worksheet['!cols'] = [
         {wch: 10}, {wch: 20}, {wch: 30}, {wch: 8}, {wch: 8}, {wch: 8}, {wch: 12}, {wch: 15}, {wch: 10}, {wch: 40}
     ];
@@ -163,7 +165,6 @@ const DashboardTutor: React.FC = () => {
     return { total: estudiantes.length, aprobados, reprobados, promedioFinal };
   };
 
-  // Componente interno para listas de estudiantes (sin cambios lógicos)
   const RenderGroupList = ({ students }: { students: CursoTutor[] }) => (
       <div className="grid grid-cols-1 divide-y divide-gray-100">
         {students.map((est, idx) => {
@@ -223,7 +224,7 @@ const DashboardTutor: React.FC = () => {
     <>
     <div className="space-y-10 pb-16 animate-in fade-in duration-700 font-sans">
       
-      {/* 1. HEADER LIMPIO (Sin botones superpuestos) */}
+      {/* HEADER */}
       <div className="flex flex-col md:flex-row md:items-end md:justify-between border-b border-gray-100 pb-6 gap-4">
           <div>
               <div className="flex items-center gap-2 mb-1">
@@ -237,7 +238,6 @@ const DashboardTutor: React.FC = () => {
                   Sistema de Monitoreo Académico y Alerta Temprana.
               </p>
           </div>
-          {/* Indicador de periodo (visible y limpio) */}
           <div className="hidden md:block text-right">
              <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full border border-gray-200 shadow-sm text-sm font-medium text-gray-600">
                 <Calendar size={14} className="text-unach-blue" />
@@ -246,9 +246,8 @@ const DashboardTutor: React.FC = () => {
           </div>
       </div>
 
-      {/* --- TARJETAS GRUPOS (Sin cambios) --- */}
+      {/* TARJETAS GRUPOS */}
       <div className="space-y-4">
-        {/* ... (Sección de atención prioritaria y buen pronóstico igual que antes) ... */}
         <div className={`border rounded-2xl shadow-sm overflow-hidden transition-all duration-300 ${groupsOpen.critical ? 'bg-white border-rose-200 ring-1 ring-rose-100' : 'bg-white border-gray-200'}`}>
             <div onClick={() => toggleGroup('critical')} className="p-5 cursor-pointer flex items-center justify-between bg-gradient-to-r from-rose-50 to-white select-none">
                 <div className="flex items-center gap-4">
@@ -301,9 +300,8 @@ const DashboardTutor: React.FC = () => {
         </div>
       </div>
 
-      {/* --- KPIS GENERALES --- */}
+      {/* KPIS GENERALES */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* ... (Tarjetas de KPIs iguales) ... */}
          <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center group hover:border-emerald-200 transition-colors">
             <div>
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Calificación Docente</p>
@@ -324,10 +322,12 @@ const DashboardTutor: React.FC = () => {
             </div>
         </div>
 
+        {/* AQUÍ SE MUESTRAN LAS NOTIFICACIONES DE TUTORÍAS (INCLUYENDO LAS AUTOMÁTICAS) */}
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center group hover:border-amber-200 transition-colors">
             <div>
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Solicitudes Pendientes</p>
                 <div className="flex items-baseline gap-2">
+                    {/* Al eliminar el caché, este número se actualizará automáticamente si hay nuevas alertas */}
                     <span className="text-4xl font-black text-gray-800 group-hover:text-amber-600 transition-colors">
                         {tutorias_pendientes.length}
                     </span>
@@ -349,7 +349,7 @@ const DashboardTutor: React.FC = () => {
         </div>
       </div>
 
-      {/* --- SECCIÓN MIS ASIGNATURAS (CON EL NUEVO BOTÓN DE REPORTE) --- */}
+      {/* SECCIÓN MIS ASIGNATURAS */}
       <div className="space-y-6 pt-8 border-t border-gray-100">
         <div className="flex items-center justify-between px-1">
             <div className="flex items-center gap-3">
@@ -358,7 +358,6 @@ const DashboardTutor: React.FC = () => {
                 </div>
                 <h2 className="text-xl font-bold text-gray-800">Mis Asignaturas</h2>
             </div>
-            {/* Botón de reporte general (Opcional, discreto) */}
              <button 
                 onClick={() => exportarExcel(cursos, 'Reporte_Global_Docente')}
                 className="hidden md:flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg hover:bg-emerald-100 transition-colors"
@@ -371,17 +370,14 @@ const DashboardTutor: React.FC = () => {
             <div key={key} className={`bg-white border rounded-2xl transition-all duration-300 ${expandedCourses[key] ? 'border-blue-100 shadow-md ring-1 ring-blue-50' : 'border-gray-200 shadow-sm hover:border-blue-200'}`}>
                 <div onClick={() => toggleCourse(key)} className="p-5 cursor-pointer select-none flex flex-col md:flex-row md:items-center justify-between gap-4">
                   
-                  {/* TÍTULO Y DETALLES */}
                   <div className="flex-1">
                     <div className="flex items-center gap-3">
                         <h3 className={`text-lg font-bold transition-colors ${expandedCourses[key] ? 'text-unach-blue' : 'text-gray-700'}`}>
                             {data.asignatura}
                         </h3>
-                        
-                        {/* ✅ BOTÓN DE REPORTE POR PERIODO/ASIGNATURA ✅ */}
                         <button 
                             onClick={(e) => {
-                                e.stopPropagation(); // Evita que se cierre/abra la tarjeta
+                                e.stopPropagation(); 
                                 exportarExcel(data.estudiantes, `Reporte_${data.asignatura}_${data.periodo}`);
                             }}
                             className="flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-bold uppercase tracking-wide hover:bg-emerald-200 hover:shadow-sm transition-all border border-emerald-200"
@@ -401,9 +397,7 @@ const DashboardTutor: React.FC = () => {
                     </div>
                   </div>
                   
-                  {/* MINI DASHBOARD ASIGNATURA */}
                   <div className="flex items-center gap-6 text-sm">
-                         {/* ... (Estadísticas iguales) ... */}
                         <div className="text-center">
                             <p className="text-[10px] font-bold text-gray-400 uppercase">Promedio</p>
                             <p className="font-black text-gray-800">{calcularEstadisticas(data.estudiantes).promedioFinal}</p>
@@ -417,7 +411,6 @@ const DashboardTutor: React.FC = () => {
                             <p className="text-[10px] font-bold text-gray-400 uppercase">Reprob.</p>
                             <p className="font-bold text-rose-600">{calcularEstadisticas(data.estudiantes).reprobados}</p>
                         </div>
-                        {/* Icono de acordeón */}
                         <div className={`p-1 rounded-full ml-2 transition-colors ${expandedCourses[key] ? 'bg-blue-50 text-unach-blue' : 'bg-gray-50 text-gray-400'}`}>
                             {expandedCourses[key] ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                         </div>
@@ -426,7 +419,6 @@ const DashboardTutor: React.FC = () => {
 
                 {expandedCourses[key] && (
                     <div className="border-t border-gray-100 bg-gray-50/30">
-                        {/* ... (Tabla de estudiantes igual) ... */}
                         <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-100">
                             <thead className="bg-gray-50/50 text-gray-400">
