@@ -5,13 +5,14 @@ import { getTutorDashboard, TutorDashboard, CursoTutor } from '../services/tutor
 import AgendarCitaModal from '../components/AgendarCitaModal'; 
 import DashboardSkeleton from '../components/DashboardSkeleton';
 import { Link } from 'react-router-dom';
+import * as XLSX from 'xlsx'; 
 import { 
   TrendingUp, AlertCircle, Star, Clock, BookOpen, Calendar, 
   ChevronDown, ChevronUp, ArrowRightCircle, Users, 
-  Activity, BrainCircuit, CheckCircle
+  Activity, BrainCircuit, CheckCircle, Download, FileSpreadsheet
 } from 'lucide-react';
 
-const CACHE_KEY = 'tutor_dashboard_v1'; // Clave para guardar en memoria
+const CACHE_KEY = 'tutor_dashboard_v1'; 
 
 const safeParseFloat = (value: number | null | undefined): number => {
     if (value === null || value === undefined) return 0;
@@ -19,7 +20,7 @@ const safeParseFloat = (value: number | null | undefined): number => {
     return isNaN(num) ? 0 : num;
 };
 
-// Componente Circular
+// Componente Circular (Visual)
 const RiskCircle = ({ percent }: { percent: number }) => {
     const radius = 18;
     const circumference = 2 * Math.PI * radius;
@@ -46,13 +47,11 @@ const RiskCircle = ({ percent }: { percent: number }) => {
 };
 
 const DashboardTutor: React.FC = () => {
-  // 1. INICIALIZACIÓN HÍBRIDA (Busca en caché al nacer)
   const [dashboardData, setDashboardData] = useState<TutorDashboard | null>(() => {
       const cached = localStorage.getItem(CACHE_KEY);
       return cached ? JSON.parse(cached) : null;
   });
 
-  // Solo mostramos 'loading' si NO hay nada en caché
   const [loading, setLoading] = useState(!dashboardData);
   const [error, setError] = useState<string | null>(null);
   const [expandedCourses, setExpandedCourses] = useState<Record<string, boolean>>({});
@@ -67,17 +66,12 @@ const DashboardTutor: React.FC = () => {
 
   const fetchDashboardData = useCallback(async () => {
     try {
-      // NOTA: No ponemos setLoading(true) aquí para evitar parpadeos si ya estamos viendo datos viejos
       const data = await getTutorDashboard();
-      
       setDashboardData(data);
-      // Guardamos en caché lo nuevo para la próxima vez
       localStorage.setItem(CACHE_KEY, JSON.stringify(data));
-      
       setError(null);
     } catch (err) {
       console.error("Error dashboard:", err);
-      // Solo mostramos error si no tenemos datos antiguos que mostrar
       if (!dashboardData) setError('No se pudo cargar la información.');
     } finally {
       setLoading(false);
@@ -85,9 +79,40 @@ const DashboardTutor: React.FC = () => {
   }, [dashboardData]);
 
   useEffect(() => { 
-      // Llamada silenciosa en segundo plano para actualizar datos
       fetchDashboardData(); 
   }, [fetchDashboardData]);
+
+  /**
+   * FUNCIÓN GENERICA PARA EXPORTAR EXCEL
+   * Recibe los datos a exportar y el nombre sugerido del archivo.
+   */
+  const exportarExcel = (cursosData: CursoTutor[], nombreArchivo: string) => {
+    if (!cursosData || cursosData.length === 0) return;
+
+    const filas = cursosData.map(curso => ({
+        "Periodo": curso.periodo,
+        "Asignatura": curso.asignatura,
+        "Estudiante": curso.estudiante_nombre,
+        "Parcial 1": curso.parcial1 ?? '-',
+        "Parcial 2": curso.parcial2 ?? '-',
+        "Nota Final": curso.final ?? '-',
+        "Estado": curso.situacion || 'En Curso',
+        "Tutorías Recibidas": curso.tutorias_acumuladas || 0,
+        "Riesgo (%)": `${curso.probabilidad_riesgo || 0}%`,
+        "Detalle IA": curso.mensaje_explicativo || 'Sin diagnóstico'
+    }));
+
+    const worksheet = XLSX.utils.json_to_sheet(filas);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Reporte");
+
+    // Ajuste de columnas visual
+    worksheet['!cols'] = [
+        {wch: 10}, {wch: 20}, {wch: 30}, {wch: 8}, {wch: 8}, {wch: 8}, {wch: 12}, {wch: 15}, {wch: 10}, {wch: 40}
+    ];
+
+    XLSX.writeFile(workbook, `${nombreArchivo}_${new Date().toISOString().split('T')[0]}.xlsx`);
+  };
 
   const toggleCourse = (key: string) => {
       setExpandedCourses(prev => ({ ...prev, [key]: !prev[key] }));
@@ -138,13 +163,13 @@ const DashboardTutor: React.FC = () => {
     return { total: estudiantes.length, aprobados, reprobados, promedioFinal };
   };
 
+  // Componente interno para listas de estudiantes (sin cambios lógicos)
   const RenderGroupList = ({ students }: { students: CursoTutor[] }) => (
       <div className="grid grid-cols-1 divide-y divide-gray-100">
         {students.map((est, idx) => {
             const isBlocked = est.situacion === 'APROBADO' || est.situacion === 'REPROBADO';
             return (
             <div key={idx} className="p-4 flex flex-col md:flex-row items-center gap-4 hover:bg-gray-50/50 transition-colors">
-                
                 <div className="flex items-center gap-3 flex-1 min-w-[220px]">
                     <div className="w-10 h-10 rounded-full flex items-center justify-center text-sm font-bold bg-gray-100 text-gray-500 border border-white shadow-sm uppercase">
                         {est.estudiante_nombre ? est.estudiante_nombre.charAt(0) : 'E'}
@@ -156,29 +181,24 @@ const DashboardTutor: React.FC = () => {
                         </p>
                     </div>
                 </div>
-
                 <div className="flex-1 text-center md:text-left w-full">
                      <p className="text-xs text-gray-600 bg-gray-50 p-2 rounded-lg border border-gray-100 truncate">
                         {est.mensaje_explicativo || "Sin diagnóstico disponible."}
                      </p>
                 </div>
-
                 <div className="flex items-center justify-between gap-4 w-full md:w-auto mt-2 md:mt-0">
                     <div className="text-center px-2">
                         <p className="text-[9px] font-bold text-gray-400 uppercase">Nota</p>
                         <p className="text-sm font-black text-gray-700">{est.final ?? (est.parcial1 ?? '-')}</p>
                     </div>
-
                     <div className="text-center px-2 border-l border-gray-100">
                         <p className="text-[9px] font-bold text-gray-400 uppercase">Tutorías</p>
                         <p className="text-sm font-black text-indigo-600">{est.tutorias_acumuladas ?? 0}</p>
                     </div>
-
                     <div className="flex flex-col items-center px-2 border-l border-gray-100">
                         <p className="text-[9px] font-bold text-gray-400 uppercase mb-1">Éxito</p>
                         <RiskCircle percent={est.probabilidad_riesgo || 0} />
                     </div>
-
                     <div className="pl-2 border-l border-gray-100">
                         <button 
                             onClick={(e) => !isBlocked && handleOpenCita(est.matricula_id, est.estudiante_nombre, e)}
@@ -203,7 +223,7 @@ const DashboardTutor: React.FC = () => {
     <>
     <div className="space-y-10 pb-16 animate-in fade-in duration-700 font-sans">
       
-      {/* HEADER */}
+      {/* 1. HEADER LIMPIO (Sin botones superpuestos) */}
       <div className="flex flex-col md:flex-row md:items-end md:justify-between border-b border-gray-100 pb-6 gap-4">
           <div>
               <div className="flex items-center gap-2 mb-1">
@@ -217,6 +237,7 @@ const DashboardTutor: React.FC = () => {
                   Sistema de Monitoreo Académico y Alerta Temprana.
               </p>
           </div>
+          {/* Indicador de periodo (visible y limpio) */}
           <div className="hidden md:block text-right">
              <div className="inline-flex items-center gap-2 px-4 py-2 bg-white rounded-full border border-gray-200 shadow-sm text-sm font-medium text-gray-600">
                 <Calendar size={14} className="text-unach-blue" />
@@ -225,9 +246,9 @@ const DashboardTutor: React.FC = () => {
           </div>
       </div>
 
-      {/* --- TARJETAS GRUPOS --- */}
+      {/* --- TARJETAS GRUPOS (Sin cambios) --- */}
       <div className="space-y-4">
-        
+        {/* ... (Sección de atención prioritaria y buen pronóstico igual que antes) ... */}
         <div className={`border rounded-2xl shadow-sm overflow-hidden transition-all duration-300 ${groupsOpen.critical ? 'bg-white border-rose-200 ring-1 ring-rose-100' : 'bg-white border-gray-200'}`}>
             <div onClick={() => toggleGroup('critical')} className="p-5 cursor-pointer flex items-center justify-between bg-gradient-to-r from-rose-50 to-white select-none">
                 <div className="flex items-center gap-4">
@@ -282,7 +303,8 @@ const DashboardTutor: React.FC = () => {
 
       {/* --- KPIS GENERALES --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center group hover:border-emerald-200 transition-colors">
+        {/* ... (Tarjetas de KPIs iguales) ... */}
+         <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center group hover:border-emerald-200 transition-colors">
             <div>
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Calificación Docente</p>
                 <div className="flex items-baseline gap-2">
@@ -327,27 +349,48 @@ const DashboardTutor: React.FC = () => {
         </div>
       </div>
 
-      {/* --- SECCIÓN MIS ASIGNATURAS --- */}
+      {/* --- SECCIÓN MIS ASIGNATURAS (CON EL NUEVO BOTÓN DE REPORTE) --- */}
       <div className="space-y-6 pt-8 border-t border-gray-100">
-        <div className="flex items-center gap-3 px-1">
-            <div className="p-2 bg-unach-blue rounded-lg text-white shadow-md shadow-blue-200">
-                <BookOpen size={20} />
+        <div className="flex items-center justify-between px-1">
+            <div className="flex items-center gap-3">
+                <div className="p-2 bg-unach-blue rounded-lg text-white shadow-md shadow-blue-200">
+                    <BookOpen size={20} />
+                </div>
+                <h2 className="text-xl font-bold text-gray-800">Mis Asignaturas</h2>
             </div>
-            <h2 className="text-xl font-bold text-gray-800">Mis Asignaturas</h2>
+            {/* Botón de reporte general (Opcional, discreto) */}
+             <button 
+                onClick={() => exportarExcel(cursos, 'Reporte_Global_Docente')}
+                className="hidden md:flex items-center gap-2 px-3 py-1.5 text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg hover:bg-emerald-100 transition-colors"
+            >
+                <FileSpreadsheet size={14} /> Reporte Global
+            </button>
         </div>
         
         {Object.entries(cursosAgrupados).map(([key, data]: any) => (
             <div key={key} className={`bg-white border rounded-2xl transition-all duration-300 ${expandedCourses[key] ? 'border-blue-100 shadow-md ring-1 ring-blue-50' : 'border-gray-200 shadow-sm hover:border-blue-200'}`}>
                 <div onClick={() => toggleCourse(key)} className="p-5 cursor-pointer select-none flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  
+                  {/* TÍTULO Y DETALLES */}
                   <div className="flex-1">
                     <div className="flex items-center gap-3">
                         <h3 className={`text-lg font-bold transition-colors ${expandedCourses[key] ? 'text-unach-blue' : 'text-gray-700'}`}>
                             {data.asignatura}
                         </h3>
-                        <div className={`p-1 rounded-full transition-colors ${expandedCourses[key] ? 'bg-blue-50 text-unach-blue' : 'bg-gray-50 text-gray-400'}`}>
-                            {expandedCourses[key] ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
-                        </div>
+                        
+                        {/* ✅ BOTÓN DE REPORTE POR PERIODO/ASIGNATURA ✅ */}
+                        <button 
+                            onClick={(e) => {
+                                e.stopPropagation(); // Evita que se cierre/abra la tarjeta
+                                exportarExcel(data.estudiantes, `Reporte_${data.asignatura}_${data.periodo}`);
+                            }}
+                            className="flex items-center gap-1.5 px-3 py-1 bg-emerald-100 text-emerald-700 rounded-full text-[10px] font-bold uppercase tracking-wide hover:bg-emerald-200 hover:shadow-sm transition-all border border-emerald-200"
+                            title="Descargar reporte solo de esta materia"
+                        >
+                            <Download size={12} /> Excel
+                        </button>
                     </div>
+
                     <div className="flex items-center gap-2 mt-2">
                         <span className="px-2 py-0.5 bg-gray-50 border border-gray-100 rounded text-[10px] font-bold text-gray-500 uppercase flex items-center gap-1">
                              <Calendar size={10} /> {data.periodo}
@@ -360,6 +403,7 @@ const DashboardTutor: React.FC = () => {
                   
                   {/* MINI DASHBOARD ASIGNATURA */}
                   <div className="flex items-center gap-6 text-sm">
+                         {/* ... (Estadísticas iguales) ... */}
                         <div className="text-center">
                             <p className="text-[10px] font-bold text-gray-400 uppercase">Promedio</p>
                             <p className="font-black text-gray-800">{calcularEstadisticas(data.estudiantes).promedioFinal}</p>
@@ -373,11 +417,16 @@ const DashboardTutor: React.FC = () => {
                             <p className="text-[10px] font-bold text-gray-400 uppercase">Reprob.</p>
                             <p className="font-bold text-rose-600">{calcularEstadisticas(data.estudiantes).reprobados}</p>
                         </div>
+                        {/* Icono de acordeón */}
+                        <div className={`p-1 rounded-full ml-2 transition-colors ${expandedCourses[key] ? 'bg-blue-50 text-unach-blue' : 'bg-gray-50 text-gray-400'}`}>
+                            {expandedCourses[key] ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                        </div>
                   </div>
                 </div>
 
                 {expandedCourses[key] && (
                     <div className="border-t border-gray-100 bg-gray-50/30">
+                        {/* ... (Tabla de estudiantes igual) ... */}
                         <div className="overflow-x-auto">
                         <table className="min-w-full divide-y divide-gray-100">
                             <thead className="bg-gray-50/50 text-gray-400">
@@ -413,7 +462,6 @@ const DashboardTutor: React.FC = () => {
                                         </div>
                                     </div>
                                 </td>
-                                
                                 <td className="px-6 py-4 text-center text-sm font-medium text-gray-500">{est.parcial1 ?? '-'}</td>
                                 <td className="px-6 py-4 text-center text-sm font-medium text-gray-500">{est.parcial2 ?? '-'}</td>
                                 <td className="px-6 py-4 text-center"><span className={`text-sm font-black ${est.final && est.final >= 7 ? 'text-unach-blue' : 'text-gray-300'}`}>{est.final ?? '-'}</span></td>
@@ -422,8 +470,6 @@ const DashboardTutor: React.FC = () => {
                                         {est.situacion || 'En Curso'}
                                     </span>
                                 </td>
-
-                                {/* BOTÓN CITAR TABLA INFERIOR */}
                                 <td className="px-6 py-4 text-center">
                                     <button 
                                         onClick={(e) => !isBlocked && handleOpenCita(est.matricula_id, est.estudiante_nombre, e)}
@@ -437,7 +483,6 @@ const DashboardTutor: React.FC = () => {
                                         <Calendar size={12} /> Citar
                                     </button>
                                 </td>
-                                
                                 <td className="px-6 py-4 text-center">
                                     <div className="flex justify-center">
                                         <RiskCircle percent={est.probabilidad_riesgo || 0} />
